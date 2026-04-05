@@ -170,6 +170,8 @@ This is effective for engines that don't support parameterized queries (e.g., At
 
 The built-in denylist does not guarantee 100% protection against all SQL injection vectors. For stricter control, define [custom schema types](#custom-schema-types) tailored to your project's specific validation needs.
 
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
 ## sql-formatter Compatibility
 
 The `{{variable}}` syntax is fully compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter). A `paramTypes` custom regex is required so that `{{variables}}` containing SQL keywords (e.g. `{{limit}}`) are treated as parameters instead of being parsed as SQL.
