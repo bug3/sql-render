@@ -63,14 +63,14 @@ describe('defineQuery — schema mode', () => {
         const { sql } = getEvents({
             tableName: 'prod_events',
             status: 'active',
-            startDate: '2024-01-01',
+            startDate: '2022-02-22',
             orderBy: 'created_at',
             limit: 100,
         });
 
         expect(sql).toContain('prod_events');
         expect(sql).toContain("status = 'active'");
-        expect(sql).toContain("created_at >= '2024-01-01'");
+        expect(sql).toContain("created_at >= '2022-02-22'");
         expect(sql).toContain('created_at');
         expect(sql).toContain('100');
     });

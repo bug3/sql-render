@@ -6,7 +6,7 @@ describe('schema.string', () => {
         expect(schema.string.validate('hello')).toBe(true);
         expect(schema.string.validate('')).toBe(true);
         expect(schema.string.validate('prod_events')).toBe(true);
-        expect(schema.string.validate('2024-01-01')).toBe(true);
+        expect(schema.string.validate('2022-02-22')).toBe(true);
     });
 
     it('rejects non-strings', () => {
@@ -62,15 +62,15 @@ describe('schema.boolean', () => {
 
 describe('schema.isoDate', () => {
     it('accepts valid dates', () => {
-        expect(schema.isoDate.validate('2026-04-01')).toBe(true);
+        expect(schema.isoDate.validate('2022-02-22')).toBe(true);
         expect(schema.isoDate.validate('2000-01-31')).toBe(true);
     });
 
     it('rejects invalid formats', () => {
-        expect(schema.isoDate.validate('04-01-2026')).toBe(false);
-        expect(schema.isoDate.validate('2026/04/01')).toBe(false);
-        expect(schema.isoDate.validate('2026-4-1')).toBe(false);
-        expect(schema.isoDate.validate('2026-04-01T00:00:00Z')).toBe(false);
+        expect(schema.isoDate.validate('02-22-2022')).toBe(false);
+        expect(schema.isoDate.validate('2022/02/22')).toBe(false);
+        expect(schema.isoDate.validate('2022-2-22')).toBe(false);
+        expect(schema.isoDate.validate('2022-02-22T00:00:00Z')).toBe(false);
         expect(schema.isoDate.validate('')).toBe(false);
         expect(schema.isoDate.validate(123)).toBe(false);
     });
@@ -91,17 +91,17 @@ describe('schema.isoDate', () => {
 
 describe('schema.isoTimestamp', () => {
     it('accepts valid timestamps', () => {
-        expect(schema.isoTimestamp.validate('2026-04-01T13:57:34Z')).toBe(true);
-        expect(schema.isoTimestamp.validate('2026-04-01T13:57:34.000Z')).toBe(true);
-        expect(schema.isoTimestamp.validate('2026-04-01T13:57:34.123456Z')).toBe(true);
-        expect(schema.isoTimestamp.validate('2026-04-01T13:57:34+03:00')).toBe(true);
-        expect(schema.isoTimestamp.validate('2026-04-01T13:57:34-05:00')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34.000Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34.123456Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34+03:00')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34-05:00')).toBe(true);
     });
 
     it('rejects invalid formats', () => {
-        expect(schema.isoTimestamp.validate('2026-04-01')).toBe(false);
-        expect(schema.isoTimestamp.validate('2026-04-01 13:57:34')).toBe(false);
-        expect(schema.isoTimestamp.validate('2026-04-01T13:57:34')).toBe(false);
+        expect(schema.isoTimestamp.validate('2022-02-22')).toBe(false);
+        expect(schema.isoTimestamp.validate('2022-02-22 13:57:34')).toBe(false);
+        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34')).toBe(false);
         expect(schema.isoTimestamp.validate('not-a-timestamp')).toBe(false);
         expect(schema.isoTimestamp.validate(123)).toBe(false);
     });
@@ -189,7 +189,7 @@ describe('schema.s3Path', () => {
     it('accepts valid S3 paths', () => {
         expect(schema.s3Path.validate('s3://my-bucket/data/')).toBe(true);
         expect(schema.s3Path.validate('s3://my-bucket/path/to/file.parquet')).toBe(true);
-        expect(schema.s3Path.validate('s3://bucket123/year=2024/month=01/')).toBe(true);
+        expect(schema.s3Path.validate('s3://bucket123/year=2022/month=02/')).toBe(true);
         expect(schema.s3Path.validate('s3://my-bucket')).toBe(true);
     });
 

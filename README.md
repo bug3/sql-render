@@ -50,7 +50,7 @@ const getEvents = defineQuery<{
 const { sql } = getEvents({
   tableName: 'prod_events',
   status: 'active',
-  startDate: '2024-01-01',
+  startDate: '2022-02-22',
   orderBy: 'created_at',
   limit: 100,
 });
@@ -62,7 +62,7 @@ Result:
 SELECT event_id, event_name
 FROM prod_events
 WHERE status = 'active'
-  AND created_at >= '2024-01-01'
+  AND created_at >= '2022-02-22'
 ORDER BY created_at
 LIMIT 100
 ```
@@ -85,7 +85,7 @@ const getEvents = defineQuery('./queries/getEvents.sql', {
 const { sql } = getEvents({
   tableName: 'prod_events',
   status: 'active',
-  startDate: '2024-01-01',
+  startDate: '2022-02-22',
   orderBy: 'created_at',
   limit: 100,
 });
@@ -98,8 +98,8 @@ const { sql } = getEvents({
 | `schema.string` | Any string (with SQL injection check) | `'hello'` |
 | `schema.number` | Finite number | `42`, `3.14` |
 | `schema.boolean` | `true` / `false` | `true` |
-| `schema.isoDate` | `YYYY-MM-DD` | `'2026-04-01'` |
-| `schema.isoTimestamp` | ISO 8601 with timezone | `'2026-04-01T13:57:34.000Z'` |
+| `schema.isoDate` | `YYYY-MM-DD` | `'2022-02-22'` |
+| `schema.isoTimestamp` | ISO 8601 with timezone | `'2022-02-22T13:57:34.000Z'` |
 | `schema.identifier` | SQL identifier (up to `db.schema.table`) | `'public.users'` |
 | `schema.uuid` | RFC 4122 UUID | `'550e8400-e29b-41d4-a716-446655440000'` |
 | `schema.positiveInt` | Positive integer | `100` |
