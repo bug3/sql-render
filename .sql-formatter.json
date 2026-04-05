@@ -1,0 +1,6 @@
+{
+  "language": "trino",
+  "keywordCase": "upper",
+  "functionCase": "upper",
+  "dataTypeCase": "upper"
+}
