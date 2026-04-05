@@ -18,7 +18,7 @@ npm install sql-render
 import { defineQuery } from 'sql-render';
 
 const query = defineQuery<{ table: string; id: number }>('./query.sql');
-const { sql } = query({ table: 'users', id: 42 });
+const { sql } = query({ table: 'users', id: 33 });
 ```
 
 Accepts string, number, and boolean parameters. Validates types at runtime, escapes strings, and checks for SQL injection patterns.

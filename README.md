@@ -96,7 +96,7 @@ const { sql } = getEvents({
 | Type | Format | Example |
 |------|--------|---------|
 | `schema.string` | Any string (with SQL injection check) | `'hello'` |
-| `schema.number` | Finite number | `42`, `3.14` |
+| `schema.number` | Finite number | `33`, `3.14` |
 | `schema.boolean` | `true` / `false` | `true` |
 | `schema.isoDate` | `YYYY-MM-DD` | `'2022-02-22'` |
 | `schema.isoTimestamp` | ISO 8601 with timezone | `'2022-02-22T13:57:34.000Z'` |

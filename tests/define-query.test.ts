@@ -7,9 +7,9 @@ const fixture = (name: string) => path.join(__dirname, 'fixtures', name);
 describe('defineQuery — generic mode', () => {
     it('renders a query with basic types', () => {
         const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
-        const { sql } = query({ table: 'users', id: 42 });
+        const { sql } = query({ table: 'users', id: 33 });
         expect(sql).toContain('users');
-        expect(sql).toContain('id = 42');
+        expect(sql).toContain('id = 33');
     });
 
     it('validates number type', () => {
@@ -80,9 +80,9 @@ describe('defineQuery — schema mode', () => {
             table: schema.identifier,
             id: schema.number,
         });
-        const { sql } = query({ table: 'users', id: 42 });
+        const { sql } = query({ table: 'users', id: 33 });
         expect(sql).toContain('users');
-        expect(sql).toContain('id = 42');
+        expect(sql).toContain('id = 33');
     });
 
     it('handles a query with no variables', () => {

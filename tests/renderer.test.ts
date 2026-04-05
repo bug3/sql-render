@@ -9,8 +9,8 @@ describe('render', () => {
 
     it('replaces multiple different tokens', () => {
         const template = 'SELECT * FROM {{table}} WHERE id = {{id}}';
-        const result = render(template, { table: 'users', id: '42' });
-        expect(result).toBe('SELECT * FROM users WHERE id = 42');
+        const result = render(template, { table: 'users', id: '33' });
+        expect(result).toBe('SELECT * FROM users WHERE id = 33');
     });
 
     it('replaces multiple occurrences of the same token', () => {

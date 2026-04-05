@@ -36,7 +36,7 @@ describe('schema.string', () => {
 
 describe('schema.number', () => {
     it('accepts finite numbers', () => {
-        expect(schema.number.validate(42)).toBe(true);
+        expect(schema.number.validate(33)).toBe(true);
         expect(schema.number.validate(0)).toBe(true);
         expect(schema.number.validate(-3.14)).toBe(true);
     });
@@ -44,7 +44,7 @@ describe('schema.number', () => {
     it('rejects non-finite values', () => {
         expect(schema.number.validate(NaN)).toBe(false);
         expect(schema.number.validate(Infinity)).toBe(false);
-        expect(schema.number.validate('42')).toBe(false);
+        expect(schema.number.validate('33')).toBe(false);
     });
 });
 
@@ -131,7 +131,7 @@ describe('schema.identifier', () => {
         expect(schema.identifier.validate('a.b.c.d')).toBe(false);
         expect(schema.identifier.validate('.table')).toBe(false);
         expect(schema.identifier.validate('')).toBe(false);
-        expect(schema.identifier.validate(42)).toBe(false);
+        expect(schema.identifier.validate(33)).toBe(false);
     });
 });
 
