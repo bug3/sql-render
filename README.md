@@ -164,7 +164,7 @@ import { SQL_INJECTION_PATTERNS } from 'sql-render';
 
 ## Security Model
 
-sql-render protects against SQL injection using a **denylist + escape** strategy — not parameterized queries (prepared statements). Values are validated and escaped before being interpolated directly into the SQL string.
+sql-render protects against SQL injection using a **denylist + escape** strategy, not parameterized queries (prepared statements). Values are validated and escaped before being interpolated directly into the SQL string.
 
 This is effective for engines that don't support parameterized queries (e.g., Athena, Trino DDL, ad-hoc SQL scripts). If your database driver supports parameterized queries, prefer using them as the primary defense and treat sql-render's protection as an additional layer.
 
