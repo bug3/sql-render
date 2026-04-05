@@ -67,8 +67,8 @@ LIMIT 100
 
 Loads a SQL file, parses `{{variable}}` tokens, and returns a render function.
 
-- **filePath** — path to the `.sql` file (relative paths resolve from `process.cwd()`)
-- **T** — generic type defining the expected parameter shape
+- **filePath**: path to the `.sql` file (relative paths resolve from `process.cwd()`)
+- **T**: generic type defining the expected parameter shape
 
 Returns a function: `(params: T, options?: QueryOptions<T>) => { sql: string }`
 
