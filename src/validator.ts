@@ -12,6 +12,9 @@ export const SQL_INJECTION_PATTERNS: { name: string; regex: RegExp }[] = [
     { name: 'time-based injection', regex: /\b(SLEEP|BENCHMARK)\s*\(/i },
     { name: 'WAITFOR', regex: /\bWAITFOR\s+DELAY\b/i },
     { name: 'system procedure', regex: /\b(xp_|sp_)\w+/i },
+    { name: 'GRANT/REVOKE', regex: /\b(GRANT|REVOKE)\b/i },
+    { name: 'file operation', regex: /\b(LOAD_FILE|INTO\s+OUTFILE|INTO\s+DUMPFILE)\b/i },
+    { name: 'LOAD DATA', regex: /\bLOAD\s+DATA\b/i },
 ];
 
 function detectSqlInjection(key: string, value: string): void {

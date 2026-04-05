@@ -54,6 +54,11 @@ describe('validateAndConvert', () => {
         expect(() => validateAndConvert('f', 'value; DROP')).toThrow('SQL injection pattern detected');
         expect(() => validateAndConvert('f', 'DROP TABLE users')).toThrow('SQL injection pattern detected');
         expect(() => validateAndConvert('f', '1 UNION SELECT *')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'GRANT ALL')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'REVOKE SELECT')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'LOAD_FILE("/etc/passwd")')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'INTO OUTFILE "/tmp/x"')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'LOAD DATA INFILE')).toThrow('SQL injection pattern detected');
     });
 
     it('does not flag partial word matches', () => {
