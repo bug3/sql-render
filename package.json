@@ -1,7 +1,7 @@
 {
   "name": "sql-render",
   "version": "0.1.0",
-  "description": "TypeScript-first SQL templating library with {{variable}} syntax, type validation, and SQL injection protection",
+  "description": "Type-safe {{variable}} templating for .sql files with built-in injection protection",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

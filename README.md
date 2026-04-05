@@ -1,6 +1,6 @@
 # sql-render
 
-TypeScript-first SQL templating library. Load SQL files with `{{variable}}` syntax, validate parameters by type, and render safe SQL strings.
+Type-safe `{{variable}}` templating for `.sql` files with built-in injection protection.
 
 - Zero runtime dependencies
 - Built-in SQL injection protection
