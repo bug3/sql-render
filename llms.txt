@@ -58,7 +58,7 @@ Schema mode validates at define-time (schema keys must match template tokens) an
 - `schema.uuid` - RFC 4122 UUID
 - `schema.positiveInt` - integer greater than 0
 - `schema.enum(...values)` - whitelist of allowed string values
-- `schema.s3Path` - S3 URI (s3://bucket/path)
+- `schema.s3Path` - S3 URI (s3://athena-results/queries/)
 
 ### Custom schema types
 

@@ -59,12 +59,18 @@ const { sql } = getEvents({
 Result:
 
 ```sql
-SELECT event_id, event_name
-FROM prod_events
-WHERE status = 'active'
+SELECT
+  event_id,
+  event_name
+FROM
+  prod_events
+WHERE
+  status = 'active'
   AND created_at >= '2022-02-22'
-ORDER BY created_at
-LIMIT 99
+ORDER BY
+  created_at
+LIMIT
+  99
 ```
 
 ## Schema Validation
@@ -104,7 +110,7 @@ const { sql } = getEvents({
 | `schema.uuid` | RFC 4122 UUID | `'550e8400-e29b-41d4-a716-446655440000'` |
 | `schema.positiveInt` | Positive integer | `100` |
 | `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
-| `schema.s3Path` | S3 URI | `'s3://bucket/path/'` |
+| `schema.s3Path` | S3 URI | `'s3://athena-results/queries/'` |
 
 ### Custom Schema Types
 
@@ -162,7 +168,7 @@ import { SQL_INJECTION_PATTERNS } from 'sql-render';
 | Schema mismatch | `Schema missing definitions for template variables: [id]` |
 | Missing params | `Missing variables in params: [tableName, limit]` |
 | Extra params | `Extra variables not in template: [foo]` |
-| Schema validation | `Schema validation failed for 'status'` |
+| Schema validation | `Schema validation failed for 'status': received string ("invalid")` |
 | Type validation | `SQL injection pattern detected in 'status': ...` |
 | Null/undefined | `Validation failed for 'key': value cannot be null or undefined` |
 | Invalid descriptor | `Invalid schema descriptor for 'key': must have a validate(val) method` |
