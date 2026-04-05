@@ -77,7 +77,9 @@ export function defineQuery(
                 }
                 const desc = schemaDef[key];
                 if (!desc.validate(value)) {
-                    throw new Error(`Schema validation failed for '${key}'`);
+                    throw new Error(
+                        `Schema validation failed for '${key}': received ${typeof value} (${JSON.stringify(value)})`,
+                    );
                 }
                 values[key] = escapeValue(value);
             } else {
