@@ -2,5 +2,8 @@
   "language": "trino",
   "keywordCase": "upper",
   "functionCase": "upper",
-  "dataTypeCase": "upper"
+  "dataTypeCase": "upper",
+  "paramTypes": {
+    "custom": [{ "regex": "\\{\\{[a-zA-Z_][a-zA-Z0-9_]*\\}\\}" }]
+  }
 }

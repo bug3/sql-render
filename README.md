@@ -172,7 +172,7 @@ The built-in denylist does not guarantee 100% protection against all SQL injecti
 
 ## sql-formatter Compatibility
 
-The `{{variable}}` syntax is fully compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter). The Trino dialect natively supports `{{double brace}}` parameters, so no custom regex is needed.
+The `{{variable}}` syntax is fully compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter). A `paramTypes` custom regex is required so that `{{variables}}` containing SQL keywords (e.g. `{{limit}}`) are treated as parameters instead of being parsed as SQL.
 
 ### VS Code
 
@@ -187,7 +187,10 @@ Install the [SQL Formatter VSCode](https://marketplace.visualstudio.com/items?it
     "SQL-Formatter-VSCode.dialect": "trino",
     "SQL-Formatter-VSCode.keywordCase": "upper",
     "SQL-Formatter-VSCode.functionCase": "upper",
-    "SQL-Formatter-VSCode.dataTypeCase": "upper"
+    "SQL-Formatter-VSCode.dataTypeCase": "upper",
+    "SQL-Formatter-VSCode.paramTypes": {
+        "custom": [{ "regex": "\\{\\{[a-zA-Z_][a-zA-Z0-9_]*\\}\\}" }]
+    }
 }
 ```
 
