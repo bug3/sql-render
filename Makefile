@@ -1,4 +1,4 @@
-.PHONY: install build test test-watch lint fmt clean publish
+.PHONY: install build test test-watch lint fmt clean release-patch release-minor release-major publish
 
 install:
 	npm install
@@ -20,6 +20,18 @@ fmt:
 
 clean:
 	rm -rf dist node_modules
+
+release-patch:
+	npm version patch -m "release: %s"
+	git push --follow-tags
+
+release-minor:
+	npm version minor -m "release: %s"
+	git push --follow-tags
+
+release-major:
+	npm version major -m "release: %s"
+	git push --follow-tags
 
 publish:
 	npm publish
