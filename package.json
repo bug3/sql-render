@@ -39,12 +39,9 @@
     "node": ">=18"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^9.39.4",
     "@types/node": "^25.5.2",
     "eslint": "^9.39.4",
-    "eslint-config-airbnb-base": "^15.0.0",
-    "eslint-plugin-import": "^2.32.0",
     "sql-formatter": "^15.7.3",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
