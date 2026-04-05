@@ -29,6 +29,15 @@ export function defineQuery(
     if (schemaDef) {
         const schemaKeys = Object.keys(schemaDef);
 
+        for (const key of schemaKeys) {
+            const desc = schemaDef[key];
+            if (!desc || typeof desc.validate !== 'function') {
+                throw new Error(
+                    `Invalid schema descriptor for '${key}': must have a validate(val) method`,
+                );
+            }
+        }
+
         const missingInSchema = tokens.filter((tok) => !schemaKeys.includes(tok));
         if (missingInSchema.length > 0) {
             throw new Error(

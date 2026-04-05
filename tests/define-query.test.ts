@@ -217,6 +217,24 @@ describe('defineQuery — schema mode', () => {
         });
     });
 
+    describe('invalid schema descriptors', () => {
+        it('throws on null descriptor', () => {
+            expect(() => defineQuery(fixture('simple.sql'), {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                table: null as any,
+                id: schema.number,
+            })).toThrow('Invalid schema descriptor');
+        });
+
+        it('throws on descriptor without validate method', () => {
+            expect(() => defineQuery(fixture('simple.sql'), {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                table: { foo: 'bar' } as any,
+                id: schema.number,
+            })).toThrow('must have a validate(val) method');
+        });
+    });
+
     describe('custom schema types', () => {
         it('accepts a custom type descriptor', () => {
             const prodTable = {
