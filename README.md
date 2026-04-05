@@ -134,6 +134,9 @@ A type descriptor is any object with a `validate(val: unknown) => boolean` metho
 | Execution | `EXEC`, `EXECUTE` |
 | Time-based | `SLEEP()`, `BENCHMARK()`, `WAITFOR DELAY` |
 | System procedures | `xp_*`, `sp_*` |
+| Privilege commands | `GRANT`, `REVOKE` |
+| File operations | `LOAD_FILE()`, `INTO OUTFILE`, `INTO DUMPFILE` |
+| Data loading | `LOAD DATA` |
 
 Patterns use word boundaries to avoid false positives (e.g., "backdrop" won't trigger `DROP`).
 
@@ -156,6 +159,13 @@ import { SQL_INJECTION_PATTERNS } from 'sql-render';
 | Schema validation | `Schema validation failed for 'status'` |
 | Type validation | `SQL injection pattern detected in 'status': ...` |
 | Null/undefined | `Validation failed for 'key': value cannot be null or undefined` |
+| Invalid descriptor | `Invalid schema descriptor for 'key': must have a validate(val) method` |
+
+## Security Model
+
+sql-render protects against SQL injection using a **denylist + escape** strategy — not parameterized queries (prepared statements). Values are validated and escaped before being interpolated directly into the SQL string.
+
+This is effective for engines that don't support parameterized queries (e.g., Athena, Trino DDL, ad-hoc SQL scripts). If your database driver supports parameterized queries, prefer using them as the primary defense and treat sql-render's protection as an additional layer.
 
 ## sql-formatter Compatibility
 
