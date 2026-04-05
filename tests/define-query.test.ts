@@ -65,14 +65,14 @@ describe('defineQuery — schema mode', () => {
             status: 'active',
             startDate: '2022-02-22',
             orderBy: 'created_at',
-            limit: 100,
+            limit: 99,
         });
 
         expect(sql).toContain('prod_events');
         expect(sql).toContain("status = 'active'");
         expect(sql).toContain("created_at >= '2022-02-22'");
         expect(sql).toContain('created_at');
-        expect(sql).toContain('100');
+        expect(sql).toContain('99');
     });
 
     it('renders a simple query', () => {
@@ -190,7 +190,7 @@ describe('defineQuery — schema mode', () => {
                 status: 'active',
                 startDate: 'not-a-date',
                 orderBy: 'created_at',
-                limit: 100,
+                limit: 99,
             })).toThrow('Schema validation failed');
         });
 

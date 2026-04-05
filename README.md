@@ -52,7 +52,7 @@ const { sql } = getEvents({
   status: 'active',
   startDate: '2022-02-22',
   orderBy: 'created_at',
-  limit: 100,
+  limit: 99,
 });
 ```
 
@@ -64,7 +64,7 @@ FROM prod_events
 WHERE status = 'active'
   AND created_at >= '2022-02-22'
 ORDER BY created_at
-LIMIT 100
+LIMIT 99
 ```
 
 ## Schema Validation
@@ -87,7 +87,7 @@ const { sql } = getEvents({
   status: 'active',
   startDate: '2022-02-22',
   orderBy: 'created_at',
-  limit: 100,
+  limit: 99,
 });
 ```
 

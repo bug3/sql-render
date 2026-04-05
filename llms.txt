@@ -41,7 +41,7 @@ const { sql } = getEvents({
   status: 'active',
   startDate: '2022-02-22',
   orderBy: 'created_at',
-  limit: 100,
+  limit: 99,
 });
 ```
 
