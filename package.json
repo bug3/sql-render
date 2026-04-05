@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Type-safe {{variable}} templating for .sql files with built-in injection protection",
   "author": "bug3",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bug3/sql-render.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bug3/sql-render/issues"
+  },
+  "homepage": "https://github.com/bug3/sql-render#readme",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
