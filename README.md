@@ -183,4 +183,4 @@ The `{{variable}}` syntax works with [sql-formatter](https://github.com/sql-form
 
 ## License
 
-MIT
+[MIT](https://github.com/bug3/sql-render/blob/master/LICENSE)
