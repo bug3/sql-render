@@ -7,6 +7,7 @@ Type-safe `{{variable}}` templating for `.sql` files with built-in injection pro
 - Schema-based validation with type inference
 - Custom schema types for project-specific rules
 - Works with any SQL engine (Athena, Trino, PostgreSQL, MySQL, etc.)
+- Compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter)
 
 ## Installation
 
@@ -169,15 +170,22 @@ This is effective for engines that don't support parameterized queries (e.g., At
 
 ## sql-formatter Compatibility
 
-The `{{variable}}` syntax works with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter) (Trino dialect):
+The `{{variable}}` syntax is fully compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter). The Trino dialect natively supports `{{double brace}}` parameters, so no custom regex is needed.
+
+### VS Code
+
+Install the [SQL Formatter VSCode](https://marketplace.visualstudio.com/items?itemName=ReneSaarsoo.sql-formatter-vsc) extension, then copy [`.vscode/settings.json`](.vscode/settings.json) into your project to enable format-on-save with the recommended settings:
 
 ```json
 {
-  "language": "trino",
-  "keywordCase": "upper",
-  "paramTypes": {
-    "custom": [{ "regex": "\\{\\{[a-zA-Z_][a-zA-Z0-9_]*\\}\\}" }]
-  }
+    "[sql]": {
+        "editor.defaultFormatter": "ReneSaarsoo.sql-formatter-vsc",
+        "editor.formatOnSave": true
+    },
+    "SQL-Formatter-VSCode.dialect": "trino",
+    "SQL-Formatter-VSCode.keywordCase": "upper",
+    "SQL-Formatter-VSCode.functionCase": "upper",
+    "SQL-Formatter-VSCode.dataTypeCase": "upper"
 }
 ```
 
