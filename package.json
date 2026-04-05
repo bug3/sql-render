@@ -23,10 +23,15 @@
   },
   "keywords": [
     "sql",
-    "template",
-    "render",
-    "athena",
+    "sql-template",
+    "sql-render",
     "sql-injection",
+    "athena",
+    "aws-athena",
+    "trino",
+    "query-builder",
+    "type-safe",
+    "schema-validation",
     "typescript"
   ],
   "license": "MIT",
