@@ -1,5 +1,10 @@
 # sql-render
 
+[![CI](https://github.com/bug3/sql-render/actions/workflows/ci.yml/badge.svg)](https://github.com/bug3/sql-render/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/sql-render)](https://www.npmjs.com/package/sql-render)
+[![license](https://img.shields.io/npm/l/sql-render)](LICENSE)
+[![node](https://img.shields.io/node/v/sql-render)](package.json)
+
 Type-safe `{{variable}}` templating for `.sql` files with built-in injection protection.
 
 - Zero runtime dependencies
