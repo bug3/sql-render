@@ -168,6 +168,8 @@ sql-render protects against SQL injection using a **denylist + escape** strategy
 
 This is effective for engines that don't support parameterized queries (e.g., Athena, Trino DDL, ad-hoc SQL scripts). If your database driver supports parameterized queries, prefer using them as the primary defense and treat sql-render's protection as an additional layer.
 
+The built-in denylist does not guarantee 100% protection against all SQL injection vectors. For stricter control, define [custom schema types](#custom-schema-types) tailored to your project's specific validation needs.
+
 ## sql-formatter Compatibility
 
 The `{{variable}}` syntax is fully compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter). The Trino dialect natively supports `{{double brace}}` parameters, so no custom regex is needed.
