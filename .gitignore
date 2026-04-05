@@ -2,4 +2,20 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+
+# Claude
+.claude/
