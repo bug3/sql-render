@@ -3,8 +3,8 @@
 Type-safe `{{variable}}` templating for `.sql` files with built-in injection protection.
 
 - Zero runtime dependencies
-- Schema-based validation with type inference
 - Built-in SQL injection protection
+- Schema-based validation with type inference
 - Custom schema types for project-specific rules
 - Works with any SQL engine (Athena, Trino, PostgreSQL, MySQL, etc.)
 
@@ -28,18 +28,18 @@ ORDER BY {{orderBy}}
 LIMIT {{limit}}
 ```
 
-Define a schema and use the query:
+Define and use the query in TypeScript:
 
 ```typescript
-import { defineQuery, schema } from 'sql-render';
+import { defineQuery } from 'sql-render';
 
-const getEvents = defineQuery('./queries/getEvents.sql', {
-  tableName: schema.identifier,
-  status: schema.enum('active', 'pending', 'done'),
-  startDate: schema.isoDate,
-  orderBy: schema.identifier,
-  limit: schema.positiveInt,
-});
+const getEvents = defineQuery<{
+  tableName: string;
+  status: string;
+  startDate: string;
+  orderBy: string;
+  limit: number;
+}>('./queries/getEvents.sql');
 
 const { sql } = getEvents({
   tableName: 'prod_events',
@@ -61,7 +61,31 @@ ORDER BY created_at
 LIMIT 100
 ```
 
-## Schema Types
+## Schema Validation
+
+For stricter validation, define a schema instead of a generic type. Types are inferred automatically.
+
+```typescript
+import { defineQuery, schema } from 'sql-render';
+
+const getEvents = defineQuery('./queries/getEvents.sql', {
+  tableName: schema.identifier,
+  status: schema.enum('active', 'pending', 'done'),
+  startDate: schema.isoDate,
+  orderBy: schema.identifier,
+  limit: schema.positiveInt,
+});
+
+const { sql } = getEvents({
+  tableName: 'prod_events',
+  status: 'active',
+  startDate: '2024-01-01',
+  orderBy: 'created_at',
+  limit: 100,
+});
+```
+
+### Available Schema Types
 
 | Type | Format | Example |
 |------|--------|---------|
@@ -76,7 +100,7 @@ LIMIT 100
 | `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
 | `schema.s3Path` | S3 URI | `'s3://bucket/path/'` |
 
-## Custom Schema Types
+### Custom Schema Types
 
 Define your own type descriptors for project-specific validation:
 
@@ -98,7 +122,7 @@ A type descriptor is any object with a `validate(val: unknown) => boolean` metho
 
 ## SQL Injection Protection
 
-`schema.string` checks values against built-in patterns:
+`schema.string` and the generic `string` type check values against built-in patterns:
 
 | Pattern | Examples |
 |---------|----------|
@@ -129,7 +153,8 @@ import { SQL_INJECTION_PATTERNS } from 'sql-render';
 | Schema mismatch | `Schema missing definitions for template variables: [id]` |
 | Missing params | `Missing variables in params: [tableName, limit]` |
 | Extra params | `Extra variables not in template: [foo]` |
-| Validation failed | `Schema validation failed for 'status'` |
+| Schema validation | `Schema validation failed for 'status'` |
+| Type validation | `SQL injection pattern detected in 'status': ...` |
 | Null/undefined | `Validation failed for 'key': value cannot be null or undefined` |
 
 ## sql-formatter Compatibility

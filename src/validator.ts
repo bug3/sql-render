@@ -14,9 +14,45 @@ export const SQL_INJECTION_PATTERNS: { name: string; regex: RegExp }[] = [
     { name: 'system procedure', regex: /\b(xp_|sp_)\w+/i },
 ];
 
+function detectSqlInjection(key: string, value: string): void {
+    for (const pattern of SQL_INJECTION_PATTERNS) {
+        if (pattern.regex.test(value)) {
+            throw new Error(
+                `SQL injection pattern detected in '${key}': value contains forbidden pattern (${pattern.name})`,
+            );
+        }
+    }
+}
+
 export function escapeValue(value: unknown): string {
     if (typeof value === 'string') {
         return value.replace(/'/g, "''");
     }
     return String(value);
+}
+
+export function validateAndConvert(key: string, value: unknown): string {
+    if (value === null || value === undefined) {
+        throw new Error(`Validation failed for '${key}': value cannot be null or undefined`);
+    }
+
+    switch (typeof value) {
+        case 'number':
+            if (Number.isNaN(value) || !Number.isFinite(value)) {
+                throw new Error(`Validation failed for '${key}': expected a finite number`);
+            }
+            return String(value);
+
+        case 'boolean':
+            return String(value);
+
+        case 'string':
+            detectSqlInjection(key, value);
+            return escapeValue(value);
+
+        default:
+            throw new Error(
+                `Validation failed for '${key}': unsupported type '${typeof value}'`,
+            );
+    }
 }
