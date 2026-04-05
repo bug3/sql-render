@@ -99,7 +99,7 @@ const { sql } = getEvents({
 | `schema.number` | Finite number | `33`, `3.14` |
 | `schema.boolean` | `true` / `false` | `true` |
 | `schema.isoDate` | `YYYY-MM-DD` | `'2022-02-22'` |
-| `schema.isoTimestamp` | ISO 8601 with timezone | `'2022-02-22T13:57:34.000Z'` |
+| `schema.isoTimestamp` | ISO 8601 with timezone | `'2022-02-22T22:02:22.000Z'` |
 | `schema.identifier` | SQL identifier (up to `db.schema.table`) | `'public.users'` |
 | `schema.uuid` | RFC 4122 UUID | `'550e8400-e29b-41d4-a716-446655440000'` |
 | `schema.positiveInt` | Positive integer | `100` |

@@ -91,17 +91,17 @@ describe('schema.isoDate', () => {
 
 describe('schema.isoTimestamp', () => {
     it('accepts valid timestamps', () => {
-        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34Z')).toBe(true);
-        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34.000Z')).toBe(true);
-        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34.123456Z')).toBe(true);
-        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34+03:00')).toBe(true);
-        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34-05:00')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22.000Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22.123456Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22+03:00')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22-05:00')).toBe(true);
     });
 
     it('rejects invalid formats', () => {
         expect(schema.isoTimestamp.validate('2022-02-22')).toBe(false);
-        expect(schema.isoTimestamp.validate('2022-02-22 13:57:34')).toBe(false);
-        expect(schema.isoTimestamp.validate('2022-02-22T13:57:34')).toBe(false);
+        expect(schema.isoTimestamp.validate('2022-02-22 22:02:22')).toBe(false);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22')).toBe(false);
         expect(schema.isoTimestamp.validate('not-a-timestamp')).toBe(false);
         expect(schema.isoTimestamp.validate(123)).toBe(false);
     });
