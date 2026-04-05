@@ -63,35 +63,71 @@ LIMIT 100
 
 ## API
 
-### `defineQuery<T>(filePath: string)`
+### Schema-based (recommended)
 
-Loads a SQL file, parses `{{variable}}` tokens, and returns a render function.
-
-- **filePath**: path to the `.sql` file (relative paths resolve from `process.cwd()`)
-- **T**: generic type defining the expected parameter shape
-
-Returns a function: `(params: T, options?: QueryOptions<T>) => { sql: string }`
-
-### Options
+Define a schema with built-in type validators. Types are inferred automatically.
 
 ```typescript
-const { sql } = getEvents(
-  { tableName: 'prod_events', status: 'active', startDate: '2024-01-01', orderBy: 'created_at', limit: 100 },
+import { defineQuery, schema } from 'sql-render';
+
+const getEvents = defineQuery('./queries/getEvents.sql', {
+  tableName: schema.identifier,
+  status: schema.enum('active', 'pending', 'done'),
+  startDate: schema.isoDate,
+  orderBy: schema.identifier,
+  limit: schema.positiveInt,
+});
+
+const { sql } = getEvents({
+  tableName: 'prod_events',
+  status: 'active',
+  startDate: '2024-01-01',
+  orderBy: 'created_at',
+  limit: 100,
+});
+```
+
+### Available schema types
+
+| Type | Format | Example |
+|------|--------|---------|
+| `schema.string` | Any string (with SQL injection check) | `'hello'` |
+| `schema.number` | Finite number | `42`, `3.14` |
+| `schema.boolean` | `true` / `false` | `true` |
+| `schema.isoDate` | `YYYY-MM-DD` | `'2026-04-01'` |
+| `schema.isoTimestamp` | ISO 8601 with timezone | `'2026-04-01T13:57:34.000Z'` |
+| `schema.identifier` | SQL identifier (up to `db.schema.table`) | `'public.users'` |
+| `schema.uuid` | RFC 4122 UUID | `'550e8400-e29b-41d4-a716-446655440000'` |
+| `schema.positiveInt` | Positive integer | `100` |
+| `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
+| `schema.s3Path` | S3 URI | `'s3://bucket/path/'` |
+
+### Generic-based
+
+For simpler cases, you can use an explicit generic type instead of a schema:
+
+```typescript
+import { defineQuery } from 'sql-render';
+
+const query = defineQuery<{ table: string; id: number }>('./query.sql');
+const { sql } = query({ table: 'users', id: 42 });
+```
+
+With optional custom validators per key:
+
+```typescript
+const { sql } = query(
+  { table: 'prod_users', id: 42 },
   {
     validators: {
-      tableName: (val) => typeof val === 'string' && val.startsWith('prod_'),
-      status: (val) => typeof val === 'string' && /^[a-z]+$/.test(val),
+      table: (val) => typeof val === 'string' && val.startsWith('prod_'),
     },
   },
 );
 ```
 
-#### Custom Validators
-
-- Defined per variable key
-- Receive the raw value as argument, return `boolean`
-- When provided, **replace** built-in validation for that key (user takes full control)
-- Single quote escaping still applies to string values
+Custom validators **replace** built-in validation for that key (user takes full control).
+Single quote escaping still applies to string values.
 
 ## Built-in Validation
 
@@ -136,6 +172,7 @@ import { SQL_INJECTION_PATTERNS } from 'sql-render';
 | Invalid number | `Validation failed for 'limit': expected a finite number` |
 | SQL injection | `SQL injection pattern detected in 'status': value contains forbidden pattern (inline comment)` |
 | Custom validator | `Custom validation failed for 'status'` |
+| Schema validator | `Schema validation failed for 'status'` |
 | Null/undefined | `Validation failed for 'key': value cannot be null or undefined` |
 
 ## sql-formatter Compatibility

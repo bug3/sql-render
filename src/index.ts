@@ -1,21 +1,40 @@
 import { loadTemplate } from './loader';
 import { validateAndConvert } from './validator';
 import { render } from './renderer';
-import type { QueryOptions, QueryResult, QueryFn } from './types';
+import type { SchemaDefinition } from './schema';
+import type {
+    QueryOptions, QueryResult, QueryFn, SchemaQueryFn,
+} from './types';
 
 export { SQL_INJECTION_PATTERNS } from './validator';
-export { v } from './validators';
-export type { QueryOptions, QueryResult, QueryFn } from './types';
+export { schema } from './schema';
+export type {
+    TypeDescriptor, SchemaDefinition, InferParams,
+} from './schema';
+export type {
+    QueryOptions, QueryResult, QueryFn, SchemaQueryFn,
+} from './types';
 
+export function defineQuery<S extends SchemaDefinition>(
+    filePath: string,
+    schemaDef: S,
+): SchemaQueryFn<S>;
 export function defineQuery<T extends Record<string, string | number | boolean>>(
     filePath: string,
-): QueryFn<T> {
+): QueryFn<T>;
+export function defineQuery(
+    filePath: string,
+    schemaDef?: SchemaDefinition,
+): (
+    params: Record<string, unknown>,
+    options?: QueryOptions<Record<string, unknown>>,
+) => QueryResult {
     const { template, tokens } = loadTemplate(filePath);
 
-    return (params: T, options?: QueryOptions<T>): QueryResult => {
+    return (params, options?) => {
         const paramKeys = Object.keys(params);
 
-        const missing = tokens.filter((t) => !paramKeys.includes(t));
+        const missing = tokens.filter((tok) => !paramKeys.includes(tok));
         if (missing.length > 0) {
             throw new Error(`Missing variables in params: [${missing.join(', ')}]`);
         }
@@ -29,11 +48,19 @@ export function defineQuery<T extends Record<string, string | number | boolean>>
 
         for (const key of tokens) {
             const value = params[key];
-            const customValidator = options?.validators?.[key as keyof T] as
-                | ((val: unknown) => boolean)
-                | undefined;
 
-            values[key] = validateAndConvert(key, value, customValidator);
+            if (schemaDef) {
+                const desc = schemaDef[key];
+                if (!desc.validate(value)) {
+                    throw new Error(`Schema validation failed for '${key}'`);
+                }
+                values[key] = validateAndConvert(key, value, () => true);
+            } else {
+                const customValidator = options?.validators?.[key] as
+                    | ((val: unknown) => boolean)
+                    | undefined;
+                values[key] = validateAndConvert(key, value, customValidator);
+            }
         }
 
         return { sql: render(template, values) };

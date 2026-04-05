@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { defineQuery } from '../src/index';
+import { defineQuery, schema } from '../src/index';
 
 const fixture = (name: string) => path.join(__dirname, 'fixtures', name);
 
@@ -126,5 +126,96 @@ describe('defineQuery', () => {
         );
         const { sql } = query({ table: 'users', name: "O'Brien" });
         expect(sql).toContain("O''Brien");
+    });
+
+    describe('schema-based defineQuery', () => {
+        it('renders a query with schema validation', () => {
+            const query = defineQuery(fixture('getEvents.sql'), {
+                tableName: schema.identifier,
+                status: schema.string,
+                startDate: schema.isoDate,
+                orderBy: schema.identifier,
+                limit: schema.positiveInt,
+            });
+
+            const { sql } = query({
+                tableName: 'prod_events',
+                status: 'active',
+                startDate: '2024-01-01',
+                orderBy: 'created_at',
+                limit: 100,
+            });
+
+            expect(sql).toContain('FROM prod_events');
+            expect(sql).toContain('LIMIT 100');
+        });
+
+        it('validates with schema.enum', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.positiveInt,
+            });
+
+            const { sql } = query({ table: 'users', id: 42 });
+            expect(sql).toBe('SELECT * FROM users WHERE id = 42\n');
+        });
+
+        it('throws when schema validation fails', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.positiveInt,
+            });
+
+            expect(() => query({ table: 'users', id: -1 })).toThrow('Schema validation failed');
+        });
+
+        it('throws on invalid identifier', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
+
+            expect(() => query({ table: 'DROP TABLE users', id: 1 })).toThrow('Schema validation failed');
+        });
+
+        it('throws on invalid date format', () => {
+            const query = defineQuery(fixture('getEvents.sql'), {
+                tableName: schema.identifier,
+                status: schema.string,
+                startDate: schema.isoDate,
+                orderBy: schema.identifier,
+                limit: schema.positiveInt,
+            });
+
+            expect(() => query({
+                tableName: 'events',
+                status: 'active',
+                startDate: 'not-a-date',
+                orderBy: 'created_at',
+                limit: 100,
+            })).toThrow('Schema validation failed');
+        });
+
+        it('works with schema.enum for strict value sets', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.enum('users', 'events', 'logs'),
+                id: schema.positiveInt,
+            });
+
+            const { sql } = query({ table: 'users', id: 1 });
+            expect(sql).toContain('FROM users');
+
+            expect(() => query({ table: 'secrets', id: 1 })).toThrow('Schema validation failed');
+        });
+
+        it('escapes single quotes in schema mode', () => {
+            const query = defineQuery(fixture('duplicate-vars.sql'), {
+                table: schema.identifier,
+                name: schema.string,
+            });
+
+            const { sql } = query({ table: 'users', name: "O'Brien" });
+            expect(sql).toContain("O''Brien");
+        });
     });
 });
