@@ -1,6 +1,6 @@
 {
   "name": "sql-render",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Type-safe {{variable}} templating for .sql files with built-in injection protection",
   "author": "bug3",
   "repository": {

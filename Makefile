@@ -22,15 +22,15 @@ clean:
 	rm -rf dist node_modules
 
 release-patch:
-	npm version patch -m "release: %s"
+	npm version patch -m "chore: bump version to %s"
 	git push --follow-tags
 
 release-minor:
-	npm version minor -m "release: %s"
+	npm version minor -m "chore: bump version to %s"
 	git push --follow-tags
 
 release-major:
-	npm version major -m "release: %s"
+	npm version major -m "chore: bump version to %s"
 	git push --follow-tags
 
 publish:
