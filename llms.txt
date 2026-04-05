@@ -1,0 +1,107 @@
+# sql-render
+
+> Type-safe `{{variable}}` renderer for .sql files
+
+sql-render is a TypeScript library for rendering SQL template files with variable substitution, schema validation, and SQL injection protection. It is designed for SQL engines that lack parameterized query support, such as AWS Athena and Trino DDL.
+
+## Install
+
+```bash
+npm install sql-render
+```
+
+## API
+
+### defineQuery (generic mode)
+
+```typescript
+import { defineQuery } from 'sql-render';
+
+const query = defineQuery<{ table: string; id: number }>('./query.sql');
+const { sql } = query({ table: 'users', id: 42 });
+```
+
+Accepts string, number, and boolean parameters. Validates types at runtime, escapes strings, and checks for SQL injection patterns.
+
+### defineQuery (schema mode)
+
+```typescript
+import { defineQuery, schema } from 'sql-render';
+
+const getEvents = defineQuery('./queries/getEvents.sql', {
+  tableName: schema.identifier,
+  status: schema.enum('active', 'pending', 'done'),
+  startDate: schema.isoDate,
+  orderBy: schema.identifier,
+  limit: schema.positiveInt,
+});
+
+const { sql } = getEvents({
+  tableName: 'prod_events',
+  status: 'active',
+  startDate: '2024-01-01',
+  orderBy: 'created_at',
+  limit: 100,
+});
+```
+
+Schema mode validates at define-time (schema keys must match template tokens) and at runtime (each value is validated by its type descriptor). Types are inferred automatically from the schema via `InferParams<S>`.
+
+### Schema types
+
+- `schema.string` - any string, checked against SQL injection denylist
+- `schema.number` - finite number (rejects NaN, Infinity)
+- `schema.boolean` - true or false
+- `schema.isoDate` - YYYY-MM-DD with calendar validation
+- `schema.isoTimestamp` - ISO 8601 with timezone (e.g. 2024-01-01T00:00:00Z)
+- `schema.identifier` - SQL identifier, up to 3 dot-separated parts (db.schema.table)
+- `schema.uuid` - RFC 4122 UUID
+- `schema.positiveInt` - integer greater than 0
+- `schema.enum(...values)` - whitelist of allowed string values
+- `schema.s3Path` - S3 URI (s3://bucket/path)
+
+### Custom schema types
+
+Any object with a `validate(val: unknown) => boolean` method:
+
+```typescript
+const prodTable = {
+  validate: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
+};
+
+const query = defineQuery('./query.sql', {
+  table: prodTable,
+  id: schema.positiveInt,
+});
+```
+
+### SQL file format
+
+SQL files use `{{variableName}}` placeholders:
+
+```sql
+SELECT event_id, event_name
+FROM {{tableName}}
+WHERE status = '{{status}}'
+  AND created_at >= '{{startDate}}'
+ORDER BY {{orderBy}}
+LIMIT {{limit}}
+```
+
+### Exports
+
+- `defineQuery` - main function (overloaded for generic and schema modes)
+- `schema` - built-in schema type descriptors
+- `SQL_INJECTION_PATTERNS` - array of { name, regex } patterns used for injection detection
+- Types: `TypeDescriptor`, `SchemaDefinition`, `InferParams`, `QueryResult`, `GenericQueryFn`, `SchemaQueryFn`
+
+## Key details
+
+- Zero runtime dependencies
+- Returns `{ sql: string }` - does not execute queries
+- Uses denylist + escape strategy, not parameterized queries
+- Single quotes are escaped: `'` becomes `''`
+- Template tokens must match `[a-zA-Z_][a-zA-Z0-9_]*`
+- Duplicate tokens in a template are deduplicated but all occurrences are replaced
+- Schema keys must exactly match template tokens (no missing, no extra)
+- Node.js >= 20 required
