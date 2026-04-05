@@ -30,4 +30,14 @@ describe('loadTemplate', () => {
     it('throws on missing file', () => {
         expect(() => loadTemplate('./nonexistent.sql')).toThrow('File not found');
     });
+
+    it('extracts tokens correctly on sequential calls', () => {
+        const result1 = loadTemplate(fixture('simple.sql'));
+        const result2 = loadTemplate(fixture('getEvents.sql'));
+        const result3 = loadTemplate(fixture('simple.sql'));
+
+        expect(result1.tokens).toEqual(['table', 'id']);
+        expect(result2.tokens).toEqual(['tableName', 'status', 'startDate', 'orderBy', 'limit']);
+        expect(result3.tokens).toEqual(['table', 'id']);
+    });
 });
