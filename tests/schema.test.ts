@@ -20,6 +20,11 @@ describe('schema.string', () => {
         expect(schema.string.validate('1 UNION SELECT *')).toBe(false);
         expect(schema.string.validate('DROP TABLE users')).toBe(false);
         expect(schema.string.validate('SLEEP(5)')).toBe(false);
+        expect(schema.string.validate('GRANT ALL TO admin')).toBe(false);
+        expect(schema.string.validate('REVOKE SELECT')).toBe(false);
+        expect(schema.string.validate('LOAD_FILE("/etc/passwd")')).toBe(false);
+        expect(schema.string.validate('INTO OUTFILE "/tmp/x"')).toBe(false);
+        expect(schema.string.validate('LOAD DATA INFILE')).toBe(false);
     });
 
     it('does not flag partial word matches', () => {
@@ -69,6 +74,19 @@ describe('schema.isoDate', () => {
         expect(schema.isoDate.validate('')).toBe(false);
         expect(schema.isoDate.validate(123)).toBe(false);
     });
+
+    it('rejects dates with invalid month or day', () => {
+        expect(schema.isoDate.validate('2024-13-01')).toBe(false);
+        expect(schema.isoDate.validate('2024-00-15')).toBe(false);
+        expect(schema.isoDate.validate('2024-02-30')).toBe(false);
+        expect(schema.isoDate.validate('2024-04-31')).toBe(false);
+        expect(schema.isoDate.validate('2023-02-29')).toBe(false);
+    });
+
+    it('accepts leap year dates correctly', () => {
+        expect(schema.isoDate.validate('2024-02-29')).toBe(true);
+        expect(schema.isoDate.validate('2000-02-29')).toBe(true);
+    });
 });
 
 describe('schema.isoTimestamp', () => {
@@ -86,6 +104,14 @@ describe('schema.isoTimestamp', () => {
         expect(schema.isoTimestamp.validate('2026-04-01T13:57:34')).toBe(false);
         expect(schema.isoTimestamp.validate('not-a-timestamp')).toBe(false);
         expect(schema.isoTimestamp.validate(123)).toBe(false);
+    });
+
+    it('rejects timestamps with invalid date or time components', () => {
+        expect(schema.isoTimestamp.validate('2024-13-01T12:00:00Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-02-30T12:00:00Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-01-01T25:00:00Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-01-01T12:60:00Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-01-01T12:00:60Z')).toBe(false);
     });
 });
 

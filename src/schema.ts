@@ -19,6 +19,17 @@ function isString(val: unknown): val is string {
     return typeof val === 'string';
 }
 
+function isValidDate(year: number, month: number, day: number): boolean {
+    const d = new Date(year, month - 1, day);
+    return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
+}
+
+function isValidTime(hours: number, minutes: number, seconds: number): boolean {
+    return hours >= 0 && hours <= 23
+        && minutes >= 0 && minutes <= 59
+        && seconds >= 0 && seconds <= 59;
+}
+
 export const schema = {
     string: descriptor<string>((val) => {
         if (!isString(val)) return false;
@@ -27,8 +38,21 @@ export const schema = {
     number: descriptor<number>((val) => typeof val === 'number' && Number.isFinite(val)),
     boolean: descriptor<boolean>((val) => typeof val === 'boolean'),
 
-    isoDate: descriptor<string>((val) => isString(val) && ISO_DATE_REGEX.test(val)),
-    isoTimestamp: descriptor<string>((val) => isString(val) && ISO_TIMESTAMP_REGEX.test(val)),
+    isoDate: descriptor<string>((val) => {
+        if (!isString(val) || !ISO_DATE_REGEX.test(val)) return false;
+        const [y, m, d] = val.split('-').map(Number);
+        return isValidDate(y, m, d);
+    }),
+    isoTimestamp: descriptor<string>((val) => {
+        if (!isString(val) || !ISO_TIMESTAMP_REGEX.test(val)) return false;
+        const [datePart, rest] = val.split('T');
+        const [y, m, d] = datePart.split('-').map(Number);
+        if (!isValidDate(y, m, d)) return false;
+        const timePart = rest.replace(/[Z+-].*$/, '');
+        const [hh, mm, ssRaw] = timePart.split(':');
+        const ss = parseFloat(ssRaw);
+        return isValidTime(Number(hh), Number(mm), Math.floor(ss));
+    }),
     identifier: descriptor<string>((val) => isString(val) && IDENTIFIER_REGEX.test(val)),
     uuid: descriptor<string>((val) => isString(val) && UUID_REGEX.test(val)),
     positiveInt: descriptor<number>((val) => typeof val === 'number' && Number.isInteger(val) && val > 0),
