@@ -11,6 +11,7 @@ export default tseslint.config(
   {
     files: ['**/*.ts'],
     rules: {
+      indent: ['error', 4, { SwitchCase: 1 }],
       'import/extensions': 'off',
       'import/no-unresolved': 'off',
       'no-use-before-define': 'off',
