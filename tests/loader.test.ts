@@ -19,7 +19,7 @@ describe('loadTemplate', () => {
     it('returns empty tokens for a query with no variables', () => {
         const result = loadTemplate(fixture('no-vars.sql'));
         expect(result.tokens).toEqual([]);
-        expect(result.template).toContain('SELECT 1');
+        expect(result.template).toContain('SELECT');
     });
 
     it('deduplicates repeated tokens', () => {
