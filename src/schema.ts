@@ -1,3 +1,5 @@
+import { SQL_INJECTION_PATTERNS } from './validator';
+
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
 const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*){0,2}$/;
@@ -18,7 +20,10 @@ function isString(val: unknown): val is string {
 }
 
 export const schema = {
-    string: descriptor<string>((val) => isString(val)),
+    string: descriptor<string>((val) => {
+        if (!isString(val)) return false;
+        return !SQL_INJECTION_PATTERNS.some((p) => p.regex.test(val));
+    }),
     number: descriptor<number>((val) => typeof val === 'number' && Number.isFinite(val)),
     boolean: descriptor<boolean>((val) => typeof val === 'boolean'),
 

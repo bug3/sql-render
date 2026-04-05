@@ -2,14 +2,30 @@ import { describe, it, expect } from 'vitest';
 import { schema } from '../src/schema';
 
 describe('schema.string', () => {
-    it('accepts strings', () => {
+    it('accepts clean strings', () => {
         expect(schema.string.validate('hello')).toBe(true);
         expect(schema.string.validate('')).toBe(true);
+        expect(schema.string.validate('prod_events')).toBe(true);
+        expect(schema.string.validate('2024-01-01')).toBe(true);
     });
 
     it('rejects non-strings', () => {
         expect(schema.string.validate(123)).toBe(false);
         expect(schema.string.validate(null)).toBe(false);
+    });
+
+    it('rejects SQL injection patterns', () => {
+        expect(schema.string.validate('value -- comment')).toBe(false);
+        expect(schema.string.validate('value; DROP TABLE')).toBe(false);
+        expect(schema.string.validate('1 UNION SELECT *')).toBe(false);
+        expect(schema.string.validate('DROP TABLE users')).toBe(false);
+        expect(schema.string.validate('SLEEP(5)')).toBe(false);
+    });
+
+    it('does not flag partial word matches', () => {
+        expect(schema.string.validate('backdrop')).toBe(true);
+        expect(schema.string.validate('executor')).toBe(true);
+        expect(schema.string.validate('creative')).toBe(true);
     });
 });
 

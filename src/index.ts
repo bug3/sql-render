@@ -1,38 +1,33 @@
 import { loadTemplate } from './loader';
-import { validateAndConvert } from './validator';
+import { escapeValue } from './validator';
 import { render } from './renderer';
-import type { SchemaDefinition } from './schema';
-import type {
-    QueryOptions, QueryResult, QueryFn, SchemaQueryFn,
-} from './types';
+import type { SchemaDefinition, InferParams } from './schema';
+import type { QueryResult } from './types';
 
 export { SQL_INJECTION_PATTERNS } from './validator';
 export { schema } from './schema';
-export type {
-    TypeDescriptor, SchemaDefinition, InferParams,
-} from './schema';
-export type {
-    QueryOptions, QueryResult, QueryFn, SchemaQueryFn,
-} from './types';
+export type { TypeDescriptor, SchemaDefinition, InferParams } from './schema';
+export type { QueryResult, QueryFn } from './types';
 
 export function defineQuery<S extends SchemaDefinition>(
     filePath: string,
     schemaDef: S,
-): SchemaQueryFn<S>;
-export function defineQuery<T extends Record<string, string | number | boolean>>(
-    filePath: string,
-): QueryFn<T>;
-export function defineQuery(
-    filePath: string,
-    schemaDef?: SchemaDefinition,
-): (
-    params: Record<string, unknown>,
-    options?: QueryOptions<Record<string, unknown>>,
-) => QueryResult {
+): (params: InferParams<S>) => QueryResult {
     const { template, tokens } = loadTemplate(filePath);
 
-    return (params, options?) => {
-        const paramKeys = Object.keys(params);
+    const schemaKeys = Object.keys(schemaDef);
+    const missingInSchema = tokens.filter((tok) => !schemaKeys.includes(tok));
+    if (missingInSchema.length > 0) {
+        throw new Error(`Schema missing definitions for template variables: [${missingInSchema.join(', ')}]`);
+    }
+
+    const extraInSchema = schemaKeys.filter((k) => !tokens.includes(k));
+    if (extraInSchema.length > 0) {
+        throw new Error(`Schema defines variables not in template: [${extraInSchema.join(', ')}]`);
+    }
+
+    return (params: InferParams<S>): QueryResult => {
+        const paramKeys = Object.keys(params as Record<string, unknown>);
 
         const missing = tokens.filter((tok) => !paramKeys.includes(tok));
         if (missing.length > 0) {
@@ -47,20 +42,18 @@ export function defineQuery(
         const values: Record<string, string> = {};
 
         for (const key of tokens) {
-            const value = params[key];
+            const value = (params as Record<string, unknown>)[key];
 
-            if (schemaDef) {
-                const desc = schemaDef[key];
-                if (!desc.validate(value)) {
-                    throw new Error(`Schema validation failed for '${key}'`);
-                }
-                values[key] = validateAndConvert(key, value, () => true);
-            } else {
-                const customValidator = options?.validators?.[key] as
-                    | ((val: unknown) => boolean)
-                    | undefined;
-                values[key] = validateAndConvert(key, value, customValidator);
+            if (value === null || value === undefined) {
+                throw new Error(`Validation failed for '${key}': value cannot be null or undefined`);
             }
+
+            const desc = schemaDef[key];
+            if (!desc.validate(value)) {
+                throw new Error(`Schema validation failed for '${key}'`);
+            }
+
+            values[key] = escapeValue(value);
         }
 
         return { sql: render(template, values) };

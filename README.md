@@ -3,9 +3,9 @@
 Type-safe `{{variable}}` templating for `.sql` files with built-in injection protection.
 
 - Zero runtime dependencies
+- Schema-based validation with type inference
 - Built-in SQL injection protection
-- Custom validators per variable
-- Full TypeScript support with generics
+- Custom schema types for project-specific rules
 - Works with any SQL engine (Athena, Trino, PostgreSQL, MySQL, etc.)
 
 ## Installation
@@ -28,44 +28,7 @@ ORDER BY {{orderBy}}
 LIMIT {{limit}}
 ```
 
-Define and use the query in TypeScript:
-
-```typescript
-import { defineQuery } from 'sql-render';
-
-const getEvents = defineQuery<{
-  tableName: string;
-  status: string;
-  startDate: string;
-  orderBy: string;
-  limit: number;
-}>('./queries/getEvents.sql');
-
-const { sql } = getEvents({
-  tableName: 'prod_events',
-  status: 'active',
-  startDate: '2024-01-01',
-  orderBy: 'created_at',
-  limit: 100,
-});
-```
-
-Result:
-
-```sql
-SELECT event_id, event_name
-FROM prod_events
-WHERE status = 'active'
-  AND created_at >= '2024-01-01'
-ORDER BY created_at
-LIMIT 100
-```
-
-## API
-
-### Schema-based (recommended)
-
-Define a schema with built-in type validators. Types are inferred automatically.
+Define a schema and use the query:
 
 ```typescript
 import { defineQuery, schema } from 'sql-render';
@@ -87,7 +50,18 @@ const { sql } = getEvents({
 });
 ```
 
-### Available schema types
+Result:
+
+```sql
+SELECT event_id, event_name
+FROM prod_events
+WHERE status = 'active'
+  AND created_at >= '2024-01-01'
+ORDER BY created_at
+LIMIT 100
+```
+
+## Schema Types
 
 | Type | Format | Example |
 |------|--------|---------|
@@ -102,46 +76,29 @@ const { sql } = getEvents({
 | `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
 | `schema.s3Path` | S3 URI | `'s3://bucket/path/'` |
 
-### Generic-based
+## Custom Schema Types
 
-For simpler cases, you can use an explicit generic type instead of a schema:
-
-```typescript
-import { defineQuery } from 'sql-render';
-
-const query = defineQuery<{ table: string; id: number }>('./query.sql');
-const { sql } = query({ table: 'users', id: 42 });
-```
-
-With optional custom validators per key:
+Define your own type descriptors for project-specific validation:
 
 ```typescript
-const { sql } = query(
-  { table: 'prod_users', id: 42 },
-  {
-    validators: {
-      table: (val) => typeof val === 'string' && val.startsWith('prod_'),
-    },
-  },
-);
+import { defineQuery, schema } from 'sql-render';
+
+const prodTable = {
+  validate: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
+};
+
+const query = defineQuery('./query.sql', {
+  table: prodTable,
+  startDate: schema.isoDate,
+  limit: schema.positiveInt,
+});
 ```
 
-Custom validators **replace** built-in validation for that key (user takes full control).
-Single quote escaping still applies to string values.
-
-## Built-in Validation
-
-| Type | Rule | Output |
-|------|------|--------|
-| `number` | Must be finite (`!isNaN && isFinite`) | `String(value)` |
-| `boolean` | Must be `true` or `false` | `"true"` / `"false"` |
-| `string` | SQL injection check + escape `'` to `''` | Escaped string |
-
-`null` and `undefined` values are always rejected.
+A type descriptor is any object with a `validate(val: unknown) => boolean` method.
 
 ## SQL Injection Protection
 
-String values are checked against built-in patterns:
+`schema.string` checks values against built-in patterns:
 
 | Pattern | Examples |
 |---------|----------|
@@ -156,7 +113,9 @@ String values are checked against built-in patterns:
 
 Patterns use word boundaries to avoid false positives (e.g., "backdrop" won't trigger `DROP`).
 
-The pattern list is exported as `SQL_INJECTION_PATTERNS` for reference:
+Other schema types like `schema.identifier`, `schema.isoDate`, `schema.uuid` etc. are inherently safe due to their strict format validation.
+
+The pattern list is exported for reference:
 
 ```typescript
 import { SQL_INJECTION_PATTERNS } from 'sql-render';
@@ -167,12 +126,10 @@ import { SQL_INJECTION_PATTERNS } from 'sql-render';
 | Scenario | Error |
 |----------|-------|
 | File not found | `File not found: ./query.sql` |
+| Schema mismatch | `Schema missing definitions for template variables: [id]` |
 | Missing params | `Missing variables in params: [tableName, limit]` |
 | Extra params | `Extra variables not in template: [foo]` |
-| Invalid number | `Validation failed for 'limit': expected a finite number` |
-| SQL injection | `SQL injection pattern detected in 'status': value contains forbidden pattern (inline comment)` |
-| Custom validator | `Custom validation failed for 'status'` |
-| Schema validator | `Schema validation failed for 'status'` |
+| Validation failed | `Schema validation failed for 'status'` |
 | Null/undefined | `Validation failed for 'key': value cannot be null or undefined` |
 
 ## sql-formatter Compatibility

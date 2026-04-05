@@ -6,13 +6,13 @@ const fixture = (name: string) => path.join(__dirname, 'fixtures', name);
 
 describe('defineQuery', () => {
     it('renders a full query with all parameters', () => {
-        const getEvents = defineQuery<{
-            tableName: string;
-            status: string;
-            startDate: string;
-            orderBy: string;
-            limit: number;
-        }>(fixture('getEvents.sql'));
+        const getEvents = defineQuery(fixture('getEvents.sql'), {
+            tableName: schema.identifier,
+            status: schema.string,
+            startDate: schema.isoDate,
+            orderBy: schema.identifier,
+            limit: schema.positiveInt,
+        });
 
         const { sql } = getEvents({
             tableName: 'prod_events',
@@ -30,143 +30,91 @@ describe('defineQuery', () => {
     });
 
     it('renders a simple query', () => {
-        const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        const query = defineQuery(fixture('simple.sql'), {
+            table: schema.identifier,
+            id: schema.number,
+        });
         const { sql } = query({ table: 'users', id: 42 });
         expect(sql).toBe('SELECT * FROM users WHERE id = 42\n');
     });
 
     it('handles a query with no variables', () => {
-        const query = defineQuery<Record<string, never>>(fixture('no-vars.sql'));
-        const { sql } = query({} as Record<string, never>);
+        const query = defineQuery(fixture('no-vars.sql'), {});
+        const { sql } = query({});
         expect(sql).toBe('SELECT 1\n');
     });
 
-    it('handles duplicate tokens — same value applied to all occurrences', () => {
-        const query = defineQuery<{ table: string; name: string }>(
-            fixture('duplicate-vars.sql'),
-        );
+    it('handles duplicate tokens', () => {
+        const query = defineQuery(fixture('duplicate-vars.sql'), {
+            table: schema.identifier,
+            name: schema.string,
+        });
         const { sql } = query({ table: 'users', name: 'john' });
         expect(sql).toBe("SELECT * FROM users WHERE name = 'john' OR alias = 'john'\n");
     });
 
-    describe('error handling', () => {
-        it('throws on missing file', () => {
-            expect(() => defineQuery('./nonexistent.sql')).toThrow('File not found');
+    it('escapes single quotes in string values', () => {
+        const query = defineQuery(fixture('duplicate-vars.sql'), {
+            table: schema.identifier,
+            name: schema.string,
+        });
+        const { sql } = query({ table: 'users', name: "O'Brien" });
+        expect(sql).toContain("O''Brien");
+    });
+
+    describe('schema validation at define time', () => {
+        it('throws when schema is missing a template variable', () => {
+            expect(() => defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+            })).toThrow('Schema missing definitions for template variables: [id]');
         });
 
-        it('throws when params are missing', () => {
-            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        it('throws when schema has extra variables', () => {
+            expect(() => defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+                foo: schema.string,
+            })).toThrow('Schema defines variables not in template: [foo]');
+        });
+    });
+
+    describe('runtime validation', () => {
+        it('throws on missing params', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
             expect(() => query({ table: 'users' } as { table: string; id: number })).toThrow(
                 'Missing variables in params: [id]',
             );
         });
 
-        it('throws when extra params are provided', () => {
-            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        it('throws on extra params', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
             const params = { table: 'users', id: 1, foo: 'bar' } as unknown as { table: string; id: number };
             expect(() => query(params)).toThrow('Extra variables not in template: [foo]');
         });
 
-        it('throws on SQL injection in string values', () => {
-            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
-            expect(() => query({ table: 'users; DROP TABLE users', id: 1 })).toThrow(
-                'SQL injection pattern detected',
-            );
-        });
-
-        it('throws on NaN number value', () => {
-            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
-            expect(() => query({ table: 'users', id: NaN })).toThrow('expected a finite number');
-        });
-
         it('throws on null value', () => {
-            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
             const params = { table: 'users', id: null } as unknown as { table: string; id: number };
             expect(() => query(params)).toThrow('cannot be null or undefined');
         });
-    });
 
-    describe('custom validators', () => {
-        it('applies custom validator per key', () => {
-            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
-
-            const { sql } = query(
-                { table: 'prod_users', id: 1 },
-                { validators: { table: (val) => typeof val === 'string' && val.startsWith('prod_') } },
-            );
-
-            expect(sql).toContain('FROM prod_users');
-        });
-
-        it('throws when custom validator fails', () => {
-            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
-            const opts = {
-                validators: {
-                    table: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
-                },
-            };
-            expect(() => query({ table: 'staging_users', id: 1 }, opts)).toThrow('Custom validation failed');
-        });
-
-        it('custom validator bypasses built-in SQL injection checks', () => {
-            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
-
-            const { sql } = query(
-                { table: 'users -- safe', id: 1 },
-                { validators: { table: () => true } },
-            );
-
-            expect(sql).toContain('FROM users -- safe');
-        });
-    });
-
-    it('escapes single quotes in string values', () => {
-        const query = defineQuery<{ table: string; name: string }>(
-            fixture('duplicate-vars.sql'),
-        );
-        const { sql } = query({ table: 'users', name: "O'Brien" });
-        expect(sql).toContain("O''Brien");
-    });
-
-    describe('schema-based defineQuery', () => {
-        it('renders a query with schema validation', () => {
-            const query = defineQuery(fixture('getEvents.sql'), {
-                tableName: schema.identifier,
-                status: schema.string,
-                startDate: schema.isoDate,
-                orderBy: schema.identifier,
-                limit: schema.positiveInt,
-            });
-
-            const { sql } = query({
-                tableName: 'prod_events',
-                status: 'active',
-                startDate: '2024-01-01',
-                orderBy: 'created_at',
-                limit: 100,
-            });
-
-            expect(sql).toContain('FROM prod_events');
-            expect(sql).toContain('LIMIT 100');
-        });
-
-        it('validates with schema.enum', () => {
+        it('throws on SQL injection in schema.string', () => {
             const query = defineQuery(fixture('simple.sql'), {
-                table: schema.identifier,
-                id: schema.positiveInt,
+                table: schema.string,
+                id: schema.number,
             });
-
-            const { sql } = query({ table: 'users', id: 42 });
-            expect(sql).toBe('SELECT * FROM users WHERE id = 42\n');
-        });
-
-        it('throws when schema validation fails', () => {
-            const query = defineQuery(fixture('simple.sql'), {
-                table: schema.identifier,
-                id: schema.positiveInt,
-            });
-
-            expect(() => query({ table: 'users', id: -1 })).toThrow('Schema validation failed');
+            expect(() => query({ table: 'users; DROP TABLE users', id: 1 })).toThrow(
+                'Schema validation failed',
+            );
         });
 
         it('throws on invalid identifier', () => {
@@ -174,11 +122,12 @@ describe('defineQuery', () => {
                 table: schema.identifier,
                 id: schema.number,
             });
-
-            expect(() => query({ table: 'DROP TABLE users', id: 1 })).toThrow('Schema validation failed');
+            expect(() => query({ table: 'DROP TABLE users', id: 1 })).toThrow(
+                'Schema validation failed',
+            );
         });
 
-        it('throws on invalid date format', () => {
+        it('throws on invalid date', () => {
             const query = defineQuery(fixture('getEvents.sql'), {
                 tableName: schema.identifier,
                 status: schema.string,
@@ -186,7 +135,6 @@ describe('defineQuery', () => {
                 orderBy: schema.identifier,
                 limit: schema.positiveInt,
             });
-
             expect(() => query({
                 tableName: 'events',
                 status: 'active',
@@ -196,26 +144,56 @@ describe('defineQuery', () => {
             })).toThrow('Schema validation failed');
         });
 
-        it('works with schema.enum for strict value sets', () => {
+        it('throws on non-positive integer for positiveInt', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.positiveInt,
+            });
+            expect(() => query({ table: 'users', id: -1 })).toThrow('Schema validation failed');
+        });
+    });
+
+    describe('schema.enum', () => {
+        it('accepts allowed values', () => {
             const query = defineQuery(fixture('simple.sql'), {
                 table: schema.enum('users', 'events', 'logs'),
                 id: schema.positiveInt,
             });
-
             const { sql } = query({ table: 'users', id: 1 });
             expect(sql).toContain('FROM users');
-
-            expect(() => query({ table: 'secrets', id: 1 })).toThrow('Schema validation failed');
         });
 
-        it('escapes single quotes in schema mode', () => {
-            const query = defineQuery(fixture('duplicate-vars.sql'), {
-                table: schema.identifier,
-                name: schema.string,
+        it('rejects disallowed values', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.enum('users', 'events', 'logs'),
+                id: schema.positiveInt,
             });
+            expect(() => query({ table: 'secrets', id: 1 })).toThrow('Schema validation failed');
+        });
+    });
 
-            const { sql } = query({ table: 'users', name: "O'Brien" });
-            expect(sql).toContain("O''Brien");
+    describe('custom schema types', () => {
+        it('accepts a custom type descriptor', () => {
+            const prodTable = {
+                validate: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
+            };
+            const query = defineQuery(fixture('simple.sql'), {
+                table: prodTable,
+                id: schema.number,
+            });
+            const { sql } = query({ table: 'prod_users', id: 1 });
+            expect(sql).toContain('FROM prod_users');
+        });
+
+        it('throws when custom type validation fails', () => {
+            const prodTable = {
+                validate: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
+            };
+            const query = defineQuery(fixture('simple.sql'), {
+                table: prodTable,
+                id: schema.number,
+            });
+            expect(() => query({ table: 'staging_users', id: 1 })).toThrow('Schema validation failed');
         });
     });
 });
