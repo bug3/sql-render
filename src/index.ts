@@ -4,6 +4,7 @@ import { render } from './renderer';
 import type { QueryOptions, QueryResult, QueryFn } from './types';
 
 export { SQL_INJECTION_PATTERNS } from './validator';
+export { v } from './validators';
 export type { QueryOptions, QueryResult, QueryFn } from './types';
 
 export function defineQuery<T extends Record<string, string | number | boolean>>(
