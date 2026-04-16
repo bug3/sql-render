@@ -1,0 +1,1771 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+# File Summary
+
+## Purpose
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+## File Format
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A header with the file path (## File: path/to/file)
+  b. The full contents of the file in a code block
+
+## Usage Guidelines
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+## Notes
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: llms-full.txt
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+# Directory Structure
+```
+.github/
+  workflows/
+    ci.yml
+    release.yml
+    repomix.yml
+src/
+  index.ts
+  loader.ts
+  renderer.ts
+  schema.ts
+  types.ts
+  validator.ts
+tests/
+  fixtures/
+    duplicate-vars.sql
+    getEvents.sql
+    no-vars.sql
+    simple.sql
+  define-query.test.ts
+  loader.test.ts
+  renderer.test.ts
+  schema.test.ts
+  validator.test.ts
+.gitignore
+.sql-formatter.json
+eslint.config.mjs
+LICENSE
+llms.txt
+Makefile
+package.json
+README.md
+ROADMAP.md
+SECURITY.md
+tsconfig.json
+tsup.config.ts
+vitest.config.ts
+```
+
+# Files
+
+## File: .github/workflows/ci.yml
+````yaml
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+````
+
+## File: .github/workflows/release.yml
+````yaml
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - run: gh release create ${{ github.ref_name }} --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+````
+
+## File: .github/workflows/repomix.yml
+````yaml
+name: Repomix
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip repomix]')"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: npx -y repomix --style markdown --output llms-full.txt --ignore llms-full.txt
+      - name: Commit llms-full.txt
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add llms-full.txt
+          if git diff --cached --quiet; then
+            echo "No changes to llms-full.txt"
+            exit 0
+          fi
+          git commit -m "chore: regenerate llms-full.txt [skip repomix]"
+          git push
+````
+
+## File: src/index.ts
+````typescript
+import { loadTemplate } from './loader';
+import { validateAndConvert, escapeValue } from './validator';
+import { render } from './renderer';
+import type { SchemaDefinition } from './schema';
+import type {
+    QueryResult, GenericQueryFn, SchemaQueryFn,
+} from './types';
+
+export { SQL_INJECTION_PATTERNS } from './validator';
+export { schema } from './schema';
+export type { TypeDescriptor, SchemaDefinition, InferParams } from './schema';
+export type {
+    QueryResult, GenericQueryFn, SchemaQueryFn,
+} from './types';
+
+export function defineQuery<S extends SchemaDefinition>(
+    filePath: string,
+    schemaDef: S,
+): SchemaQueryFn<S>;
+export function defineQuery<T extends Record<string, string | number | boolean>>(
+    filePath: string,
+): GenericQueryFn<T>;
+export function defineQuery(
+    filePath: string,
+    schemaDef?: SchemaDefinition,
+): (params: Record<string, unknown>) => QueryResult {
+    const { template, tokens } = loadTemplate(filePath);
+
+    if (schemaDef) {
+        const schemaKeys = Object.keys(schemaDef);
+
+        for (const key of schemaKeys) {
+            const desc = schemaDef[key];
+            if (!desc || typeof desc.validate !== 'function') {
+                throw new Error(
+                    `Invalid schema descriptor for '${key}': must have a validate(val) method`,
+                );
+            }
+        }
+
+        const missingInSchema = tokens.filter((tok) => !schemaKeys.includes(tok));
+        if (missingInSchema.length > 0) {
+            throw new Error(
+                `Schema missing definitions for template variables: [${missingInSchema.join(', ')}]`,
+            );
+        }
+
+        const extraInSchema = schemaKeys.filter((k) => !tokens.includes(k));
+        if (extraInSchema.length > 0) {
+            throw new Error(
+                `Schema defines variables not in template: [${extraInSchema.join(', ')}]`,
+            );
+        }
+    }
+
+    return (params) => {
+        const paramKeys = Object.keys(params);
+
+        const missing = tokens.filter((tok) => !paramKeys.includes(tok));
+        if (missing.length > 0) {
+            throw new Error(`Missing variables in params: [${missing.join(', ')}]`);
+        }
+
+        const extra = paramKeys.filter((k) => !tokens.includes(k));
+        if (extra.length > 0) {
+            throw new Error(`Extra variables not in template: [${extra.join(', ')}]`);
+        }
+
+        const values: Record<string, string> = {};
+
+        for (const key of tokens) {
+            const value = params[key];
+
+            if (schemaDef) {
+                if (value === null || value === undefined) {
+                    throw new Error(`Validation failed for '${key}': value cannot be null or undefined`);
+                }
+                const desc = schemaDef[key];
+                if (!desc.validate(value)) {
+                    throw new Error(
+                        `Schema validation failed for '${key}': received ${typeof value} (${JSON.stringify(value)})`,
+                    );
+                }
+                values[key] = escapeValue(value);
+            } else {
+                values[key] = validateAndConvert(key, value);
+            }
+        }
+
+        return { sql: render(template, values) };
+    };
+}
+````
+
+## File: src/loader.ts
+````typescript
+import fs from 'node:fs';
+import path from 'node:path';
+
+const TOKEN_REGEX = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
+
+export function loadTemplate(filePath: string): { template: string; tokens: string[] } {
+    const resolved = path.resolve(filePath);
+
+    if (!fs.existsSync(resolved)) {
+        throw new Error(`File not found: ${filePath}`);
+    }
+
+    const template = fs.readFileSync(resolved, 'utf-8');
+    const seen = new Set<string>();
+    const tokens: string[] = [];
+
+    for (const match of template.matchAll(TOKEN_REGEX)) {
+        if (!seen.has(match[1])) {
+            seen.add(match[1]);
+            tokens.push(match[1]);
+        }
+    }
+
+    return { template, tokens };
+}
+````
+
+## File: src/renderer.ts
+````typescript
+export function render(template: string, values: Record<string, string>): string {
+    let result = template;
+
+    for (const [key, value] of Object.entries(values)) {
+        const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(`\\{\\{${escaped}\\}\\}`, 'g');
+        result = result.replace(pattern, () => value);
+    }
+
+    return result;
+}
+````
+
+## File: src/schema.ts
+````typescript
+import { SQL_INJECTION_PATTERNS } from './validator';
+
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
+const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*){0,2}$/;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const S3_PATH_REGEX = /^s3:\/\/(?![^/]*\.\.)[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](\/[a-zA-Z0-9._\-/=]*)?$/;
+
+export interface TypeDescriptor<T = unknown> {
+    readonly __phantom?: T;
+    validate(val: unknown): boolean;
+}
+
+function descriptor<T>(validate: (val: unknown) => boolean): TypeDescriptor<T> {
+    return { validate };
+}
+
+function isString(val: unknown): val is string {
+    return typeof val === 'string';
+}
+
+function isValidDate(year: number, month: number, day: number): boolean {
+    const d = new Date(year, month - 1, day);
+    return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
+}
+
+function isValidTime(hours: number, minutes: number, seconds: number): boolean {
+    return hours >= 0 && hours <= 23
+        && minutes >= 0 && minutes <= 59
+        && seconds >= 0 && seconds <= 60;
+}
+
+export const schema = {
+    string: descriptor<string>((val) => {
+        if (!isString(val)) return false;
+        return !SQL_INJECTION_PATTERNS.some((p) => p.regex.test(val));
+    }),
+    number: descriptor<number>((val) => typeof val === 'number' && Number.isFinite(val)),
+    boolean: descriptor<boolean>((val) => typeof val === 'boolean'),
+
+    isoDate: descriptor<string>((val) => {
+        if (!isString(val) || !ISO_DATE_REGEX.test(val)) return false;
+        const [y, m, d] = val.split('-').map(Number);
+        return isValidDate(y, m, d);
+    }),
+    isoTimestamp: descriptor<string>((val) => {
+        if (!isString(val) || !ISO_TIMESTAMP_REGEX.test(val)) return false;
+        const [datePart, rest] = val.split('T');
+        const [y, m, d] = datePart.split('-').map(Number);
+        if (!isValidDate(y, m, d)) return false;
+        const timePart = rest.replace(/[Z+-].*$/, '');
+        const [hh, mm, ssRaw] = timePart.split(':');
+        const ss = parseFloat(ssRaw);
+        return isValidTime(Number(hh), Number(mm), Math.floor(ss));
+    }),
+    identifier: descriptor<string>((val) => isString(val) && IDENTIFIER_REGEX.test(val)),
+    uuid: descriptor<string>((val) => isString(val) && UUID_REGEX.test(val)),
+    positiveInt: descriptor<number>((val) => typeof val === 'number' && Number.isInteger(val) && val > 0),
+    s3Path: descriptor<string>((val) => isString(val) && S3_PATH_REGEX.test(val)),
+
+    enum: <T extends string>(...values: T[]): TypeDescriptor<T> => descriptor<T>(
+        (val) => isString(val) && (values as string[]).includes(val),
+    ),
+};
+
+export type SchemaDefinition = Record<string, TypeDescriptor>;
+
+export type InferParams<S extends SchemaDefinition> = {
+    [K in keyof S]: S[K] extends TypeDescriptor<infer T> ? T : never;
+};
+````
+
+## File: src/types.ts
+````typescript
+import type { SchemaDefinition, InferParams } from './schema';
+
+export interface QueryResult {
+    sql: string;
+}
+
+export type GenericQueryFn<T> = (params: T) => QueryResult;
+
+export type SchemaQueryFn<S extends SchemaDefinition> = (params: InferParams<S>) => QueryResult;
+````
+
+## File: src/validator.ts
+````typescript
+export const SQL_INJECTION_PATTERNS: { name: string; regex: RegExp }[] = [
+    { name: 'inline comment', regex: /--/ },
+    { name: 'block comment open', regex: /\/\*/ },
+    { name: 'block comment close', regex: /\*\// },
+    { name: 'statement separator', regex: /;/ },
+    { name: 'DDL command', regex: /\b(DROP|ALTER|TRUNCATE|CREATE)\b/i },
+    { name: 'UNION injection', regex: /\bUNION\s+(ALL\s+)?SELECT\b/i },
+    { name: 'INSERT', regex: /\bINSERT\s+INTO\b/i },
+    { name: 'DELETE', regex: /\bDELETE\s+FROM\b/i },
+    { name: 'UPDATE', regex: /\bUPDATE\s+\S+\s+SET\b/i },
+    { name: 'EXEC', regex: /\b(EXEC|EXECUTE)\b/i },
+    { name: 'time-based injection', regex: /\b(SLEEP|BENCHMARK)\s*\(/i },
+    { name: 'WAITFOR', regex: /\bWAITFOR\s+DELAY\b/i },
+    { name: 'system procedure', regex: /\b(xp_|sp_)\w+/i },
+    { name: 'GRANT/REVOKE', regex: /\b(GRANT|REVOKE)\b/i },
+    { name: 'file operation', regex: /\b(LOAD_FILE|INTO\s+OUTFILE|INTO\s+DUMPFILE)\b/i },
+    { name: 'LOAD DATA', regex: /\bLOAD\s+DATA\b/i },
+];
+
+function detectSqlInjection(key: string, value: string): void {
+    for (const pattern of SQL_INJECTION_PATTERNS) {
+        if (pattern.regex.test(value)) {
+            throw new Error(
+                `SQL injection pattern detected in '${key}': value contains forbidden pattern (${pattern.name})`,
+            );
+        }
+    }
+}
+
+export function escapeValue(value: unknown): string {
+    if (typeof value === 'string') {
+        return value.replace(/'/g, "''");
+    }
+    return String(value);
+}
+
+export function validateAndConvert(key: string, value: unknown): string {
+    if (value === null || value === undefined) {
+        throw new Error(`Validation failed for '${key}': value cannot be null or undefined`);
+    }
+
+    switch (typeof value) {
+        case 'number':
+            if (Number.isNaN(value) || !Number.isFinite(value)) {
+                throw new Error(`Validation failed for '${key}': expected a finite number`);
+            }
+            return String(value);
+
+        case 'boolean':
+            return String(value);
+
+        case 'string':
+            detectSqlInjection(key, value);
+            return escapeValue(value);
+
+        default:
+            throw new Error(
+                `Validation failed for '${key}': unsupported type '${typeof value}'`,
+            );
+    }
+}
+````
+
+## File: tests/fixtures/duplicate-vars.sql
+````sql
+SELECT
+  *
+FROM
+  {{table}}
+WHERE
+  name = '{{name}}'
+  OR alias = '{{name}}'
+````
+
+## File: tests/fixtures/getEvents.sql
+````sql
+SELECT
+  event_id,
+  event_name
+FROM
+  {{tableName}}
+WHERE
+  status = '{{status}}'
+  AND created_at >= '{{startDate}}'
+ORDER BY
+  {{orderBy}}
+LIMIT
+  {{limit}}
+````
+
+## File: tests/fixtures/no-vars.sql
+````sql
+SELECT
+  1
+````
+
+## File: tests/fixtures/simple.sql
+````sql
+SELECT
+  *
+FROM
+  {{table}}
+WHERE
+  id = {{id}}
+````
+
+## File: tests/define-query.test.ts
+````typescript
+import path from 'node:path';
+import { describe, it, expect } from 'vitest';
+import { defineQuery, schema } from '../src/index';
+
+const fixture = (name: string) => path.join(__dirname, 'fixtures', name);
+
+describe('defineQuery — generic mode', () => {
+    it('renders a query with basic types', () => {
+        const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        const { sql } = query({ table: 'users', id: 33 });
+        expect(sql).toContain('users');
+        expect(sql).toContain('id = 33');
+    });
+
+    it('validates number type', () => {
+        const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        expect(() => query({ table: 'users', id: NaN })).toThrow('expected a finite number');
+    });
+
+    it('detects SQL injection in strings', () => {
+        const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        expect(() => query({ table: 'users; DROP TABLE x', id: 1 })).toThrow(
+            'SQL injection pattern detected',
+        );
+    });
+
+    it('rejects null values', () => {
+        const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        const params = { table: 'users', id: null } as unknown as { table: string; id: number };
+        expect(() => query(params)).toThrow('cannot be null or undefined');
+    });
+
+    it('escapes single quotes', () => {
+        const query = defineQuery<{ table: string; name: string }>(fixture('duplicate-vars.sql'));
+        const { sql } = query({ table: 'users', name: "O'Brien" });
+        expect(sql).toContain("O''Brien");
+    });
+
+    it('throws on missing params', () => {
+        const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        expect(() => query({ table: 'users' } as { table: string; id: number })).toThrow(
+            'Missing variables in params: [id]',
+        );
+    });
+
+    it('throws on extra params', () => {
+        const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+        const params = { table: 'users', id: 1, foo: 'bar' } as unknown as { table: string; id: number };
+        expect(() => query(params)).toThrow('Extra variables not in template: [foo]');
+    });
+});
+
+describe('defineQuery — schema mode', () => {
+    it('renders a full query with all parameters', () => {
+        const getEvents = defineQuery(fixture('getEvents.sql'), {
+            tableName: schema.identifier,
+            status: schema.string,
+            startDate: schema.isoDate,
+            orderBy: schema.identifier,
+            limit: schema.positiveInt,
+        });
+
+        const { sql } = getEvents({
+            tableName: 'prod_events',
+            status: 'active',
+            startDate: '2022-02-22',
+            orderBy: 'created_at',
+            limit: 99,
+        });
+
+        expect(sql).toContain('prod_events');
+        expect(sql).toContain("status = 'active'");
+        expect(sql).toContain("created_at >= '2022-02-22'");
+        expect(sql).toContain('created_at');
+        expect(sql).toContain('99');
+    });
+
+    it('renders a simple query', () => {
+        const query = defineQuery(fixture('simple.sql'), {
+            table: schema.identifier,
+            id: schema.number,
+        });
+        const { sql } = query({ table: 'users', id: 33 });
+        expect(sql).toContain('users');
+        expect(sql).toContain('id = 33');
+    });
+
+    it('handles a query with no variables', () => {
+        const query = defineQuery(fixture('no-vars.sql'), {});
+        const { sql } = query({});
+        expect(sql).toContain('SELECT');
+        expect(sql).toContain('1');
+    });
+
+    it('handles duplicate tokens', () => {
+        const query = defineQuery(fixture('duplicate-vars.sql'), {
+            table: schema.identifier,
+            name: schema.string,
+        });
+        const { sql } = query({ table: 'users', name: 'john' });
+        expect(sql).toContain('users');
+        expect(sql).toContain("name = 'john'");
+        expect(sql).toContain("alias = 'john'");
+    });
+
+    it('escapes single quotes in string values', () => {
+        const query = defineQuery(fixture('duplicate-vars.sql'), {
+            table: schema.identifier,
+            name: schema.string,
+        });
+        const { sql } = query({ table: 'users', name: "O'Brien" });
+        expect(sql).toContain("O''Brien");
+    });
+
+    describe('schema validation at define time', () => {
+        it('throws when schema is missing a template variable', () => {
+            expect(() => defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+            })).toThrow('Schema missing definitions for template variables: [id]');
+        });
+
+        it('throws when schema has extra variables', () => {
+            expect(() => defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+                foo: schema.string,
+            })).toThrow('Schema defines variables not in template: [foo]');
+        });
+    });
+
+    describe('runtime validation', () => {
+        it('throws on missing params', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
+            expect(() => query({ table: 'users' } as { table: string; id: number })).toThrow(
+                'Missing variables in params: [id]',
+            );
+        });
+
+        it('throws on extra params', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
+            const params = { table: 'users', id: 1, foo: 'bar' } as unknown as { table: string; id: number };
+            expect(() => query(params)).toThrow('Extra variables not in template: [foo]');
+        });
+
+        it('throws on null value', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
+            const params = { table: 'users', id: null } as unknown as { table: string; id: number };
+            expect(() => query(params)).toThrow('cannot be null or undefined');
+        });
+
+        it('throws on SQL injection in schema.string', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.string,
+                id: schema.number,
+            });
+            expect(() => query({ table: 'users; DROP TABLE users', id: 1 })).toThrow(
+                'Schema validation failed',
+            );
+        });
+
+        it('throws on invalid identifier', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
+            expect(() => query({ table: 'DROP TABLE users', id: 1 })).toThrow(
+                'Schema validation failed',
+            );
+        });
+
+        it('throws on invalid date', () => {
+            const query = defineQuery(fixture('getEvents.sql'), {
+                tableName: schema.identifier,
+                status: schema.string,
+                startDate: schema.isoDate,
+                orderBy: schema.identifier,
+                limit: schema.positiveInt,
+            });
+            expect(() => query({
+                tableName: 'events',
+                status: 'active',
+                startDate: 'not-a-date',
+                orderBy: 'created_at',
+                limit: 99,
+            })).toThrow('Schema validation failed');
+        });
+
+        it('throws on non-positive integer for positiveInt', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.positiveInt,
+            });
+            expect(() => query({ table: 'users', id: -1 })).toThrow('Schema validation failed');
+        });
+    });
+
+    describe('schema.enum', () => {
+        it('accepts allowed values', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.enum('users', 'events', 'logs'),
+                id: schema.positiveInt,
+            });
+            const { sql } = query({ table: 'users', id: 1 });
+            expect(sql).toContain('users');
+        });
+
+        it('rejects disallowed values', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.enum('users', 'events', 'logs'),
+                id: schema.positiveInt,
+            });
+            expect(() => query({ table: 'secrets', id: 1 })).toThrow('Schema validation failed');
+        });
+    });
+
+    describe('invalid schema descriptors', () => {
+        it('throws on null descriptor', () => {
+            expect(() => defineQuery(fixture('simple.sql'), {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                table: null as any,
+                id: schema.number,
+            })).toThrow('Invalid schema descriptor');
+        });
+
+        it('throws on descriptor without validate method', () => {
+            expect(() => defineQuery(fixture('simple.sql'), {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                table: { foo: 'bar' } as any,
+                id: schema.number,
+            })).toThrow('must have a validate(val) method');
+        });
+    });
+
+    describe('custom schema types', () => {
+        it('accepts a custom type descriptor', () => {
+            const prodTable = {
+                validate: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
+            };
+            const query = defineQuery(fixture('simple.sql'), {
+                table: prodTable,
+                id: schema.number,
+            });
+            const { sql } = query({ table: 'prod_users', id: 1 });
+            expect(sql).toContain('prod_users');
+        });
+
+        it('throws when custom type validation fails', () => {
+            const prodTable = {
+                validate: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
+            };
+            const query = defineQuery(fixture('simple.sql'), {
+                table: prodTable,
+                id: schema.number,
+            });
+            expect(() => query({ table: 'staging_users', id: 1 })).toThrow('Schema validation failed');
+        });
+    });
+});
+````
+
+## File: tests/loader.test.ts
+````typescript
+import path from 'node:path';
+import { describe, it, expect } from 'vitest';
+import { loadTemplate } from '../src/loader';
+
+const fixture = (name: string) => path.join(__dirname, 'fixtures', name);
+
+describe('loadTemplate', () => {
+    it('loads a SQL file and extracts tokens', () => {
+        const result = loadTemplate(fixture('getEvents.sql'));
+        expect(result.tokens).toEqual(['tableName', 'status', 'startDate', 'orderBy', 'limit']);
+        expect(result.template).toContain('{{tableName}}');
+    });
+
+    it('extracts tokens from a simple query', () => {
+        const result = loadTemplate(fixture('simple.sql'));
+        expect(result.tokens).toEqual(['table', 'id']);
+    });
+
+    it('returns empty tokens for a query with no variables', () => {
+        const result = loadTemplate(fixture('no-vars.sql'));
+        expect(result.tokens).toEqual([]);
+        expect(result.template).toContain('SELECT');
+    });
+
+    it('deduplicates repeated tokens', () => {
+        const result = loadTemplate(fixture('duplicate-vars.sql'));
+        expect(result.tokens).toEqual(['table', 'name']);
+    });
+
+    it('throws on missing file', () => {
+        expect(() => loadTemplate('./nonexistent.sql')).toThrow('File not found');
+    });
+
+    it('extracts tokens correctly on sequential calls', () => {
+        const result1 = loadTemplate(fixture('simple.sql'));
+        const result2 = loadTemplate(fixture('getEvents.sql'));
+        const result3 = loadTemplate(fixture('simple.sql'));
+
+        expect(result1.tokens).toEqual(['table', 'id']);
+        expect(result2.tokens).toEqual(['tableName', 'status', 'startDate', 'orderBy', 'limit']);
+        expect(result3.tokens).toEqual(['table', 'id']);
+    });
+});
+````
+
+## File: tests/renderer.test.ts
+````typescript
+import { describe, it, expect } from 'vitest';
+import { render } from '../src/renderer';
+
+describe('render', () => {
+    it('replaces a single token', () => {
+        const result = render('SELECT * FROM {{table}}', { table: 'users' });
+        expect(result).toBe('SELECT * FROM users');
+    });
+
+    it('replaces multiple different tokens', () => {
+        const template = 'SELECT * FROM {{table}} WHERE id = {{id}}';
+        const result = render(template, { table: 'users', id: '33' });
+        expect(result).toBe('SELECT * FROM users WHERE id = 33');
+    });
+
+    it('replaces multiple occurrences of the same token', () => {
+        const template = "SELECT * FROM {{t}} WHERE name = '{{name}}' OR alias = '{{name}}'";
+        const result = render(template, { t: 'users', name: 'john' });
+        expect(result).toBe("SELECT * FROM users WHERE name = 'john' OR alias = 'john'");
+    });
+
+    it('returns template unchanged when no tokens exist', () => {
+        const template = 'SELECT 1';
+        const result = render(template, {});
+        expect(result).toBe('SELECT 1');
+    });
+
+    it('handles empty values', () => {
+        const result = render('SELECT * FROM {{table}}', { table: '' });
+        expect(result).toBe('SELECT * FROM ');
+    });
+
+    it('treats $ sequences in values as literals', () => {
+        const template = "SELECT * FROM t WHERE a = '{{a}}' AND b = '{{b}}' AND c = '{{c}}'";
+        const result = render(template, { a: '$&', b: '$$', c: "$'" });
+        expect(result).toBe("SELECT * FROM t WHERE a = '$&' AND b = '$$' AND c = '$''");
+    });
+});
+````
+
+## File: tests/schema.test.ts
+````typescript
+import { describe, it, expect } from 'vitest';
+import { schema } from '../src/schema';
+
+describe('schema.string', () => {
+    it('accepts clean strings', () => {
+        expect(schema.string.validate('hello')).toBe(true);
+        expect(schema.string.validate('')).toBe(true);
+        expect(schema.string.validate('prod_events')).toBe(true);
+        expect(schema.string.validate('2022-02-22')).toBe(true);
+    });
+
+    it('rejects non-strings', () => {
+        expect(schema.string.validate(123)).toBe(false);
+        expect(schema.string.validate(null)).toBe(false);
+    });
+
+    it('rejects SQL injection patterns', () => {
+        expect(schema.string.validate('value -- comment')).toBe(false);
+        expect(schema.string.validate('value; DROP TABLE')).toBe(false);
+        expect(schema.string.validate('1 UNION SELECT *')).toBe(false);
+        expect(schema.string.validate('DROP TABLE users')).toBe(false);
+        expect(schema.string.validate('SLEEP(5)')).toBe(false);
+        expect(schema.string.validate('GRANT ALL TO admin')).toBe(false);
+        expect(schema.string.validate('REVOKE SELECT')).toBe(false);
+        expect(schema.string.validate('LOAD_FILE("/etc/passwd")')).toBe(false);
+        expect(schema.string.validate('INTO OUTFILE "/tmp/x"')).toBe(false);
+        expect(schema.string.validate('LOAD DATA INFILE')).toBe(false);
+    });
+
+    it('does not flag partial word matches', () => {
+        expect(schema.string.validate('backdrop')).toBe(true);
+        expect(schema.string.validate('executor')).toBe(true);
+        expect(schema.string.validate('creative')).toBe(true);
+    });
+});
+
+describe('schema.number', () => {
+    it('accepts finite numbers', () => {
+        expect(schema.number.validate(33)).toBe(true);
+        expect(schema.number.validate(0)).toBe(true);
+        expect(schema.number.validate(-3.14)).toBe(true);
+    });
+
+    it('rejects non-finite values', () => {
+        expect(schema.number.validate(NaN)).toBe(false);
+        expect(schema.number.validate(Infinity)).toBe(false);
+        expect(schema.number.validate('33')).toBe(false);
+    });
+});
+
+describe('schema.boolean', () => {
+    it('accepts booleans', () => {
+        expect(schema.boolean.validate(true)).toBe(true);
+        expect(schema.boolean.validate(false)).toBe(true);
+    });
+
+    it('rejects non-booleans', () => {
+        expect(schema.boolean.validate(1)).toBe(false);
+        expect(schema.boolean.validate('true')).toBe(false);
+    });
+});
+
+describe('schema.isoDate', () => {
+    it('accepts valid dates', () => {
+        expect(schema.isoDate.validate('2022-02-22')).toBe(true);
+        expect(schema.isoDate.validate('2000-01-31')).toBe(true);
+    });
+
+    it('rejects invalid formats', () => {
+        expect(schema.isoDate.validate('02-22-2022')).toBe(false);
+        expect(schema.isoDate.validate('2022/02/22')).toBe(false);
+        expect(schema.isoDate.validate('2022-2-22')).toBe(false);
+        expect(schema.isoDate.validate('2022-02-22T00:00:00Z')).toBe(false);
+        expect(schema.isoDate.validate('')).toBe(false);
+        expect(schema.isoDate.validate(123)).toBe(false);
+    });
+
+    it('rejects dates with invalid month or day', () => {
+        expect(schema.isoDate.validate('2024-13-01')).toBe(false);
+        expect(schema.isoDate.validate('2024-00-15')).toBe(false);
+        expect(schema.isoDate.validate('2024-02-30')).toBe(false);
+        expect(schema.isoDate.validate('2024-04-31')).toBe(false);
+        expect(schema.isoDate.validate('2023-02-29')).toBe(false);
+    });
+
+    it('accepts leap year dates correctly', () => {
+        expect(schema.isoDate.validate('2024-02-29')).toBe(true);
+        expect(schema.isoDate.validate('2000-02-29')).toBe(true);
+    });
+});
+
+describe('schema.isoTimestamp', () => {
+    it('accepts valid timestamps', () => {
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22.000Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22.123456Z')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22+03:00')).toBe(true);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22-05:00')).toBe(true);
+    });
+
+    it('rejects invalid formats', () => {
+        expect(schema.isoTimestamp.validate('2022-02-22')).toBe(false);
+        expect(schema.isoTimestamp.validate('2022-02-22 22:02:22')).toBe(false);
+        expect(schema.isoTimestamp.validate('2022-02-22T22:02:22')).toBe(false);
+        expect(schema.isoTimestamp.validate('not-a-timestamp')).toBe(false);
+        expect(schema.isoTimestamp.validate(123)).toBe(false);
+    });
+
+    it('rejects timestamps with invalid date or time components', () => {
+        expect(schema.isoTimestamp.validate('2024-13-01T12:00:00Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-02-30T12:00:00Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-01-01T25:00:00Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-01-01T12:60:00Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-01-01T12:00:61Z')).toBe(false);
+    });
+
+    it('accepts leap second (seconds = 60)', () => {
+        expect(schema.isoTimestamp.validate('2016-12-31T23:59:60Z')).toBe(true);
+    });
+});
+
+describe('schema.identifier', () => {
+    it('accepts valid identifiers', () => {
+        expect(schema.identifier.validate('users')).toBe(true);
+        expect(schema.identifier.validate('_temp')).toBe(true);
+        expect(schema.identifier.validate('event_id')).toBe(true);
+        expect(schema.identifier.validate('public.users')).toBe(true);
+        expect(schema.identifier.validate('db.schema.table')).toBe(true);
+    });
+
+    it('rejects invalid identifiers', () => {
+        expect(schema.identifier.validate('123abc')).toBe(false);
+        expect(schema.identifier.validate('user-name')).toBe(false);
+        expect(schema.identifier.validate('DROP TABLE')).toBe(false);
+        expect(schema.identifier.validate('a.b.c.d')).toBe(false);
+        expect(schema.identifier.validate('.table')).toBe(false);
+        expect(schema.identifier.validate('')).toBe(false);
+        expect(schema.identifier.validate(33)).toBe(false);
+    });
+});
+
+describe('schema.uuid', () => {
+    it('accepts valid UUIDs', () => {
+        expect(schema.uuid.validate('550e8400-e29b-41d4-a716-446655440000')).toBe(true);
+        expect(schema.uuid.validate('00000000-0000-0000-0000-000000000000')).toBe(true);
+        expect(schema.uuid.validate('A550E840-E29B-41D4-A716-446655440000')).toBe(true);
+    });
+
+    it('rejects invalid UUIDs', () => {
+        expect(schema.uuid.validate('550e8400e29b41d4a716446655440000')).toBe(false);
+        expect(schema.uuid.validate('not-a-uuid')).toBe(false);
+        expect(schema.uuid.validate('550e8400-e29b-41d4-a716')).toBe(false);
+        expect(schema.uuid.validate('')).toBe(false);
+        expect(schema.uuid.validate(123)).toBe(false);
+    });
+});
+
+describe('schema.positiveInt', () => {
+    it('accepts positive integers', () => {
+        expect(schema.positiveInt.validate(1)).toBe(true);
+        expect(schema.positiveInt.validate(100)).toBe(true);
+        expect(schema.positiveInt.validate(999999)).toBe(true);
+    });
+
+    it('rejects non-positive or non-integer values', () => {
+        expect(schema.positiveInt.validate(0)).toBe(false);
+        expect(schema.positiveInt.validate(-1)).toBe(false);
+        expect(schema.positiveInt.validate(3.14)).toBe(false);
+        expect(schema.positiveInt.validate(NaN)).toBe(false);
+        expect(schema.positiveInt.validate(Infinity)).toBe(false);
+        expect(schema.positiveInt.validate('1')).toBe(false);
+    });
+});
+
+describe('schema.enum', () => {
+    const check = schema.enum('active', 'pending', 'done');
+
+    it('accepts allowed values', () => {
+        expect(check.validate('active')).toBe(true);
+        expect(check.validate('pending')).toBe(true);
+        expect(check.validate('done')).toBe(true);
+    });
+
+    it('rejects disallowed values', () => {
+        expect(check.validate('deleted')).toBe(false);
+        expect(check.validate('ACTIVE')).toBe(false);
+        expect(check.validate('')).toBe(false);
+        expect(check.validate(123)).toBe(false);
+    });
+});
+
+describe('schema.s3Path', () => {
+    it('accepts valid S3 paths', () => {
+        expect(schema.s3Path.validate('s3://my-bucket/data/')).toBe(true);
+        expect(schema.s3Path.validate('s3://my-bucket/path/to/file.parquet')).toBe(true);
+        expect(schema.s3Path.validate('s3://bucket123/year=2022/month=02/')).toBe(true);
+        expect(schema.s3Path.validate('s3://my-bucket')).toBe(true);
+    });
+
+    it('rejects invalid S3 paths', () => {
+        expect(schema.s3Path.validate('gs://bucket/path')).toBe(false);
+        expect(schema.s3Path.validate('s3:/bucket/path')).toBe(false);
+        expect(schema.s3Path.validate('/local/path')).toBe(false);
+        expect(schema.s3Path.validate('')).toBe(false);
+        expect(schema.s3Path.validate(123)).toBe(false);
+    });
+
+    it('rejects bucket names with consecutive dots', () => {
+        expect(schema.s3Path.validate('s3://my..bucket/path')).toBe(false);
+        expect(schema.s3Path.validate('s3://my..bucket')).toBe(false);
+    });
+});
+````
+
+## File: tests/validator.test.ts
+````typescript
+import { describe, it, expect } from 'vitest';
+import { validateAndConvert, escapeValue, SQL_INJECTION_PATTERNS } from '../src/validator';
+
+describe('escapeValue', () => {
+    it('escapes single quotes in strings', () => {
+        expect(escapeValue("O'Brien")).toBe("O''Brien");
+    });
+
+    it('converts numbers to string', () => {
+        expect(escapeValue(100)).toBe('100');
+    });
+
+    it('converts booleans to string', () => {
+        expect(escapeValue(true)).toBe('true');
+    });
+});
+
+describe('validateAndConvert', () => {
+    it('rejects null', () => {
+        expect(() => validateAndConvert('key', null)).toThrow('cannot be null or undefined');
+    });
+
+    it('rejects undefined', () => {
+        expect(() => validateAndConvert('key', undefined)).toThrow('cannot be null or undefined');
+    });
+
+    it('accepts valid numbers', () => {
+        expect(validateAndConvert('limit', 100)).toBe('100');
+    });
+
+    it('rejects NaN', () => {
+        expect(() => validateAndConvert('limit', NaN)).toThrow('expected a finite number');
+    });
+
+    it('rejects Infinity', () => {
+        expect(() => validateAndConvert('limit', Infinity)).toThrow('expected a finite number');
+    });
+
+    it('accepts booleans', () => {
+        expect(validateAndConvert('active', true)).toBe('true');
+        expect(validateAndConvert('active', false)).toBe('false');
+    });
+
+    it('accepts clean strings', () => {
+        expect(validateAndConvert('name', 'hello')).toBe('hello');
+    });
+
+    it('escapes single quotes in strings', () => {
+        expect(validateAndConvert('name', "O'Brien")).toBe("O''Brien");
+    });
+
+    it('detects SQL injection patterns', () => {
+        expect(() => validateAndConvert('f', 'value -- comment')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'value; DROP')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'DROP TABLE users')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', '1 UNION SELECT *')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'GRANT ALL')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'REVOKE SELECT')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'LOAD_FILE("/etc/passwd")')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'INTO OUTFILE "/tmp/x"')).toThrow('SQL injection pattern detected');
+        expect(() => validateAndConvert('f', 'LOAD DATA INFILE')).toThrow('SQL injection pattern detected');
+    });
+
+    it('does not flag partial word matches', () => {
+        expect(() => validateAndConvert('f', 'backdrop')).not.toThrow();
+        expect(() => validateAndConvert('f', 'executor')).not.toThrow();
+        expect(() => validateAndConvert('f', 'creative')).not.toThrow();
+    });
+
+    it('rejects unsupported types', () => {
+        expect(() => validateAndConvert('key', {} as unknown)).toThrow('unsupported type');
+    });
+});
+
+describe('SQL_INJECTION_PATTERNS', () => {
+    it('is exported as an array', () => {
+        expect(SQL_INJECTION_PATTERNS).toBeInstanceOf(Array);
+        expect(SQL_INJECTION_PATTERNS.length).toBeGreaterThan(0);
+    });
+});
+````
+
+## File: .gitignore
+````
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+
+# Claude
+.claude/
+````
+
+## File: .sql-formatter.json
+````json
+{
+  "language": "trino",
+  "keywordCase": "upper",
+  "functionCase": "upper",
+  "dataTypeCase": "upper",
+  "paramTypes": {
+    "custom": [{ "regex": "\\{\\{[a-zA-Z_][a-zA-Z0-9_]*\\}\\}" }]
+  }
+}
+````
+
+## File: eslint.config.mjs
+````javascript
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  js.configs.recommended,
+  ...tseslint.configs.strict,
+  {
+    files: ['**/*.ts'],
+    rules: {
+      indent: ['error', 4, { SwitchCase: 1 }],
+      'no-use-before-define': 'off',
+      '@typescript-eslint/no-use-before-define': 'error',
+      'no-shadow': 'off',
+      '@typescript-eslint/no-shadow': 'error',
+      'no-restricted-syntax': ['error', 'ForInStatement', 'LabeledStatement', 'WithStatement'],
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    ignores: ['dist/', 'node_modules/', '*.config.*'],
+  },
+);
+````
+
+## File: LICENSE
+````
+MIT License
+
+Copyright (c) 2026 bug3
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+````
+
+## File: llms.txt
+````
+# sql-render
+
+> Type-safe `{{variable}}` renderer for .sql files
+
+sql-render is a TypeScript library for rendering SQL template files with variable substitution, schema validation, and SQL injection protection. It is designed for SQL engines that lack parameterized query support, such as AWS Athena and Trino DDL.
+
+## Install
+
+```bash
+npm install sql-render
+```
+
+## API
+
+### defineQuery (generic mode)
+
+```typescript
+import { defineQuery } from 'sql-render';
+
+const query = defineQuery<{ table: string; id: number }>('./query.sql');
+const { sql } = query({ table: 'users', id: 33 });
+```
+
+Accepts string, number, and boolean parameters. Validates types at runtime, escapes strings, and checks for SQL injection patterns.
+
+### defineQuery (schema mode)
+
+```typescript
+import { defineQuery, schema } from 'sql-render';
+
+const getEvents = defineQuery('./queries/getEvents.sql', {
+  tableName: schema.identifier,
+  status: schema.enum('active', 'pending', 'done'),
+  startDate: schema.isoDate,
+  orderBy: schema.identifier,
+  limit: schema.positiveInt,
+});
+
+const { sql } = getEvents({
+  tableName: 'prod_events',
+  status: 'active',
+  startDate: '2022-02-22',
+  orderBy: 'created_at',
+  limit: 99,
+});
+```
+
+Schema mode validates at define-time (schema keys must match template tokens) and at runtime (each value is validated by its type descriptor). Types are inferred automatically from the schema via `InferParams<S>`.
+
+### Schema types
+
+- `schema.string` - any string, checked against SQL injection denylist
+- `schema.number` - finite number (rejects NaN, Infinity)
+- `schema.boolean` - true or false
+- `schema.isoDate` - YYYY-MM-DD with calendar validation
+- `schema.isoTimestamp` - ISO 8601 with timezone (e.g. 2022-02-22T00:00:00Z)
+- `schema.identifier` - SQL identifier, up to 3 dot-separated parts (db.schema.table)
+- `schema.uuid` - UUID hex format (8-4-4-4-12 hex digits)
+- `schema.positiveInt` - integer greater than 0
+- `schema.enum(...values)` - whitelist of allowed string values
+- `schema.s3Path` - S3 URI (s3://athena-results/queries/)
+
+### Custom schema types
+
+Any object with a `validate(val: unknown) => boolean` method:
+
+```typescript
+const prodTable = {
+  validate: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
+};
+
+const query = defineQuery('./query.sql', {
+  table: prodTable,
+  id: schema.positiveInt,
+});
+```
+
+### SQL file format
+
+SQL files use `{{variableName}}` placeholders:
+
+```sql
+SELECT event_id, event_name
+FROM {{tableName}}
+WHERE status = '{{status}}'
+  AND created_at >= '{{startDate}}'
+ORDER BY {{orderBy}}
+LIMIT {{limit}}
+```
+
+### Exports
+
+- `defineQuery` - main function (overloaded for generic and schema modes)
+- `schema` - built-in schema type descriptors
+- `SQL_INJECTION_PATTERNS` - array of { name, regex } patterns used for injection detection
+- Types: `TypeDescriptor`, `SchemaDefinition`, `InferParams`, `QueryResult`, `GenericQueryFn`, `SchemaQueryFn`
+
+## Key details
+
+- Zero runtime dependencies
+- Returns `{ sql: string }` - does not execute queries
+- Uses denylist + escape strategy, not parameterized queries
+- Single quotes are escaped: `'` becomes `''`
+- Template tokens must match `[a-zA-Z_][a-zA-Z0-9_]*`
+- Duplicate tokens in a template are deduplicated but all occurrences are replaced
+- Schema keys must exactly match template tokens (no missing, no extra)
+- Node.js >= 20 required
+````
+
+## File: Makefile
+````makefile
+.PHONY: install build test test-watch lint fmt clean release-patch release-minor release-major publish
+
+install:
+	npm install
+
+build:
+	npm run build
+
+test:
+	npm run test
+
+test-watch:
+	npm run test:watch
+
+lint:
+	npm run lint
+
+fmt:
+	@for f in tests/fixtures/*.sql; do npx sql-formatter --fix "$$f"; done
+
+clean:
+	rm -rf dist node_modules
+
+release-patch:
+	npm version patch -m "chore: bump version to %s"
+	git push --follow-tags
+
+release-minor:
+	npm version minor -m "chore: bump version to %s"
+	git push --follow-tags
+
+release-major:
+	npm version major -m "chore: bump version to %s"
+	git push --follow-tags
+
+publish:
+	npm publish
+````
+
+## File: package.json
+````json
+{
+  "name": "sql-render",
+  "version": "0.1.4",
+  "description": "Type-safe {{variable}} templating for .sql files with built-in injection protection",
+  "author": "bug3",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bug3/sql-render.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bug3/sql-render/issues"
+  },
+  "homepage": "https://github.com/bug3/sql-render#readme",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/ tests/",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "sql",
+    "sql-template",
+    "sql-render",
+    "sql-injection",
+    "athena",
+    "aws-athena",
+    "trino",
+    "query-builder",
+    "type-safe",
+    "schema-validation",
+    "typescript"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^25.5.2",
+    "eslint": "^9.39.4",
+    "sql-formatter": "^15.7.3",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0",
+    "vitest": "^4.1.2"
+  }
+}
+````
+
+## File: README.md
+````markdown
+# sql-render
+
+[![CI](https://github.com/bug3/sql-render/actions/workflows/ci.yml/badge.svg)](https://github.com/bug3/sql-render/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/sql-render)](https://www.npmjs.com/package/sql-render)
+[![license](https://img.shields.io/npm/l/sql-render)](LICENSE)
+[![node](https://img.shields.io/node/v/sql-render)](package.json)
+
+Type-safe `{{variable}}` templating for `.sql` files with built-in injection protection.
+
+- Zero runtime dependencies
+- Built-in SQL injection protection
+- Schema-based validation with type inference
+- Custom schema types for project-specific rules
+- Works with SQL engines that treat backslash as literal in strings (Athena, Trino, PostgreSQL)
+- Compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter)
+
+## Installation
+
+```bash
+npm install sql-render
+```
+
+## Quick Start
+
+Create a SQL file with `{{variable}}` placeholders:
+
+```sql
+-- queries/getEvents.sql
+SELECT event_id, event_name
+FROM {{tableName}}
+WHERE status = '{{status}}'
+  AND created_at >= '{{startDate}}'
+ORDER BY {{orderBy}}
+LIMIT {{limit}}
+```
+
+Define and use the query in TypeScript:
+
+```typescript
+import { defineQuery } from 'sql-render';
+
+const getEvents = defineQuery<{
+  tableName: string;
+  status: string;
+  startDate: string;
+  orderBy: string;
+  limit: number;
+}>('./queries/getEvents.sql');
+
+const { sql } = getEvents({
+  tableName: 'prod_events',
+  status: 'active',
+  startDate: '2022-02-22',
+  orderBy: 'created_at',
+  limit: 99,
+});
+```
+
+Result:
+
+```sql
+SELECT
+  event_id,
+  event_name
+FROM
+  prod_events
+WHERE
+  status = 'active'
+  AND created_at >= '2022-02-22'
+ORDER BY
+  created_at
+LIMIT
+  99
+```
+
+## Schema Validation
+
+For stricter validation, define a schema instead of a generic type. Types are inferred automatically.
+
+```typescript
+import { defineQuery, schema } from 'sql-render';
+
+const getEvents = defineQuery('./queries/getEvents.sql', {
+  tableName: schema.identifier,
+  status: schema.enum('active', 'pending', 'done'),
+  startDate: schema.isoDate,
+  orderBy: schema.identifier,
+  limit: schema.positiveInt,
+});
+
+const { sql } = getEvents({
+  tableName: 'prod_events',
+  status: 'active',
+  startDate: '2022-02-22',
+  orderBy: 'created_at',
+  limit: 99,
+});
+```
+
+### Available Schema Types
+
+| Type | Format | Example |
+|------|--------|---------|
+| `schema.string` | Any string (with SQL injection check) | `'hello'` |
+| `schema.number` | Finite number | `33`, `3.14` |
+| `schema.boolean` | `true` / `false` | `true` |
+| `schema.isoDate` | `YYYY-MM-DD` | `'2022-02-22'` |
+| `schema.isoTimestamp` | ISO 8601 with timezone | `'2022-02-22T22:02:22.000Z'` |
+| `schema.identifier` | SQL identifier (up to `db.schema.table`) | `'public.users'` |
+| `schema.uuid` | UUID hex format (8-4-4-4-12) | `'550e8400-e29b-41d4-a716-446655440000'` |
+| `schema.positiveInt` | Positive integer | `100` |
+| `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
+| `schema.s3Path` | S3 URI | `'s3://athena-results/queries/'` |
+
+### Custom Schema Types
+
+Define your own type descriptors for project-specific validation:
+
+```typescript
+import { defineQuery, schema } from 'sql-render';
+
+const prodTable = {
+  validate: (val: unknown) => typeof val === 'string' && val.startsWith('prod_'),
+};
+
+const query = defineQuery('./query.sql', {
+  table: prodTable,
+  startDate: schema.isoDate,
+  limit: schema.positiveInt,
+});
+```
+
+A type descriptor is any object with a `validate(val: unknown) => boolean` method.
+
+## SQL Injection Protection
+
+`schema.string` and the generic `string` type check values against built-in patterns:
+
+| Pattern | Examples |
+|---------|----------|
+| Comments | `--`, `/*`, `*/` |
+| Statement separator | `;` |
+| DDL commands | `DROP`, `ALTER`, `TRUNCATE`, `CREATE` |
+| UNION injection | `UNION SELECT`, `UNION ALL SELECT` |
+| DML commands | `INSERT INTO`, `DELETE FROM`, `UPDATE ... SET` |
+| Execution | `EXEC`, `EXECUTE` |
+| Time-based | `SLEEP()`, `BENCHMARK()`, `WAITFOR DELAY` |
+| System procedures | `xp_*`, `sp_*` |
+| Privilege commands | `GRANT`, `REVOKE` |
+| File operations | `LOAD_FILE()`, `INTO OUTFILE`, `INTO DUMPFILE` |
+| Data loading | `LOAD DATA` |
+
+Patterns use word boundaries to avoid false positives (e.g., "backdrop" won't trigger `DROP`).
+
+Other schema types like `schema.identifier`, `schema.isoDate`, `schema.uuid` etc. are inherently safe due to their strict format validation.
+
+The pattern list is exported for reference:
+
+```typescript
+import { SQL_INJECTION_PATTERNS } from 'sql-render';
+```
+
+## Error Messages
+
+| Scenario | Error |
+|----------|-------|
+| File not found | `File not found: ./query.sql` |
+| Schema mismatch | `Schema missing definitions for template variables: [id]` |
+| Missing params | `Missing variables in params: [tableName, limit]` |
+| Extra params | `Extra variables not in template: [foo]` |
+| Schema validation | `Schema validation failed for 'status': received string ("invalid")` |
+| Type validation | `SQL injection pattern detected in 'status': ...` |
+| Null/undefined | `Validation failed for 'key': value cannot be null or undefined` |
+| Invalid descriptor | `Invalid schema descriptor for 'key': must have a validate(val) method` |
+
+## Security Model
+
+sql-render protects against SQL injection using a **denylist + escape** strategy, not parameterized queries (prepared statements). Values are validated and escaped before being interpolated directly into the SQL string.
+
+This is effective for engines that don't support parameterized queries (e.g., Athena, Trino DDL, ad-hoc SQL scripts). If your database driver supports parameterized queries, prefer using them as the primary defense and treat sql-render's protection as an additional layer.
+
+The built-in denylist does not guarantee 100% protection against all SQL injection vectors. For stricter control, define [custom schema types](#custom-schema-types) tailored to your project's specific validation needs.
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## sql-formatter Compatibility
+
+The `{{variable}}` syntax is fully compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter). A `paramTypes` custom regex is required so that `{{variables}}` containing SQL keywords (e.g. `{{limit}}`) are treated as parameters instead of being parsed as SQL.
+
+### VS Code
+
+Install the [SQL Formatter VSCode](https://marketplace.visualstudio.com/items?itemName=ReneSaarsoo.sql-formatter-vsc) extension, then copy [`.vscode/settings.json`](.vscode/settings.json) into your project to enable format-on-save with the recommended settings:
+
+```json
+{
+    "[sql]": {
+        "editor.defaultFormatter": "ReneSaarsoo.sql-formatter-vsc",
+        "editor.formatOnSave": true
+    },
+    "SQL-Formatter-VSCode.dialect": "trino",
+    "SQL-Formatter-VSCode.keywordCase": "upper",
+    "SQL-Formatter-VSCode.functionCase": "upper",
+    "SQL-Formatter-VSCode.dataTypeCase": "upper",
+    "SQL-Formatter-VSCode.paramTypes": {
+        "custom": [{ "regex": "\\{\\{[a-zA-Z_][a-zA-Z0-9_]*\\}\\}" }]
+    }
+}
+```
+
+## License
+
+[MIT](https://github.com/bug3/sql-render/blob/master/LICENSE)
+````
+
+## File: ROADMAP.md
+````markdown
+# Roadmap
+
+## v0.2
+
+- [ ] **Inline template support** - Allow passing SQL strings directly without requiring a `.sql` file, reducing boilerplate for short one-off queries
+- [ ] **Export rendered SQL to file** - Add an option to write the rendered SQL to a file for debugging and audit purposes
+- [ ] **TypeDescriptor `description` field** - Add an optional `description` property to `TypeDescriptor` so schema validation errors can display the expected format (e.g. `Expected: ISO date YYYY-MM-DD`)
+
+## Maybe
+
+- [ ] **Template caching** - Cache loaded templates in a `Map` to avoid redundant `readFileSync` calls when `defineQuery` is used outside module scope
+- [ ] **Conditional blocks / IN-list expansion** - Support optional WHERE clauses (`{{#if}}`) and array expansion (`WHERE id IN ({{ids}})`). Would change the library's templating nature significantly - evaluate only if `.sql` file duplication becomes a real pain point
+- [ ] **Async `loadTemplate`** - Non-blocking file reads for server environments (Express, Fastify). Not needed for current Lambda/script use cases
+- [ ] **Query execution integration** - Return parameterized output or integrate with Athena SDK. Intentionally out of scope to preserve single responsibility - better suited as a separate package
+- [ ] **Parameterized output mode** - Return `{ sql: string, params: unknown[] }` with `$1, $2` placeholders for engines that support it. Not applicable to Athena but could broaden adoption
+- [ ] **Allowlist approach for `schema.string`** - Require a regex allowlist instead of relying on the denylist. Already achievable via custom schema types, so built-in support is low priority
+````
+
+## File: SECURITY.md
+````markdown
+# Security Policy
+
+## Supported Versions
+
+| Version | Supported |
+|---------|-----------|
+| 0.1.x   | Yes       |
+
+## Reporting a Vulnerability
+
+If you discover a security vulnerability, please report it privately via [GitHub Security Advisories](https://github.com/bug3/sql-render/security/advisories/new).
+
+Do not open a public issue for security vulnerabilities.
+
+## Security Model
+
+sql-render uses a denylist + escape strategy for SQL injection protection, not parameterized queries. This is by design for engines that lack parameterized query support (e.g. Athena, Trino DDL). See the [README](README.md#security-model) for details.
+````
+
+## File: tsconfig.json
+````json
+{
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "tests"]
+}
+````
+
+## File: tsup.config.ts
+````typescript
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  entry: ['src/index.ts'],
+  format: ['esm', 'cjs'],
+  dts: true,
+  clean: true,
+  outExtension({ format }) {
+    return {
+      js: format === 'esm' ? '.mjs' : '.cjs',
+    };
+  },
+});
+````
+
+## File: vitest.config.ts
+````typescript
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+});
+````
