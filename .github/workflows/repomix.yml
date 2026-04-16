@@ -6,18 +6,26 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   pack:
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip repomix]')"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-      - run: npx -y repomix
-      - uses: actions/upload-artifact@v4
-        with:
-          name: repomix-output
-          path: repomix-output.xml
+      - run: npx -y repomix --style markdown --output llms-full.txt --ignore llms-full.txt
+      - name: Commit llms-full.txt
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add llms-full.txt
+          if git diff --cached --quiet; then
+            echo "No changes to llms-full.txt"
+            exit 0
+          fi
+          git commit -m "chore: regenerate llms-full.txt [skip repomix]"
+          git push
