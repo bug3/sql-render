@@ -111,7 +111,11 @@ describe('schema.isoTimestamp', () => {
         expect(schema.isoTimestamp.validate('2024-02-30T12:00:00Z')).toBe(false);
         expect(schema.isoTimestamp.validate('2024-01-01T25:00:00Z')).toBe(false);
         expect(schema.isoTimestamp.validate('2024-01-01T12:60:00Z')).toBe(false);
-        expect(schema.isoTimestamp.validate('2024-01-01T12:00:60Z')).toBe(false);
+        expect(schema.isoTimestamp.validate('2024-01-01T12:00:61Z')).toBe(false);
+    });
+
+    it('accepts leap second (seconds = 60)', () => {
+        expect(schema.isoTimestamp.validate('2016-12-31T23:59:60Z')).toBe(true);
     });
 });
 

@@ -27,7 +27,7 @@ function isValidDate(year: number, month: number, day: number): boolean {
 function isValidTime(hours: number, minutes: number, seconds: number): boolean {
     return hours >= 0 && hours <= 23
         && minutes >= 0 && minutes <= 59
-        && seconds >= 0 && seconds <= 59;
+        && seconds >= 0 && seconds <= 60;
 }
 
 export const schema = {
