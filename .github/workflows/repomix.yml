@@ -27,5 +27,5 @@ jobs:
             echo "No changes to llms-full.txt"
             exit 0
           fi
-          git commit -m "chore: regenerate llms-full.txt [skip repomix]"
+          git commit -m "chore: regenerate llms-full.txt"
           git push
