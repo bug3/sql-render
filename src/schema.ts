@@ -4,7 +4,7 @@ const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
 const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*){0,2}$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const S3_PATH_REGEX = /^s3:\/\/[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](\/[a-zA-Z0-9._\-/=]*)?$/;
+const S3_PATH_REGEX = /^s3:\/\/(?![^/]*\.\.)[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](\/[a-zA-Z0-9._\-/=]*)?$/;
 
 export interface TypeDescriptor<T = unknown> {
     readonly __phantom?: T;

@@ -204,4 +204,9 @@ describe('schema.s3Path', () => {
         expect(schema.s3Path.validate('')).toBe(false);
         expect(schema.s3Path.validate(123)).toBe(false);
     });
+
+    it('rejects bucket names with consecutive dots', () => {
+        expect(schema.s3Path.validate('s3://my..bucket/path')).toBe(false);
+        expect(schema.s3Path.validate('s3://my..bucket')).toBe(false);
+    });
 });
