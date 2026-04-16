@@ -11,7 +11,7 @@ Type-safe `{{variable}}` templating for `.sql` files with built-in injection pro
 - Built-in SQL injection protection
 - Schema-based validation with type inference
 - Custom schema types for project-specific rules
-- Works with any SQL engine (Athena, Trino, PostgreSQL, MySQL, etc.)
+- Works with SQL engines that treat backslash as literal in strings (Athena, Trino, PostgreSQL)
 - Compatible with [sql-formatter](https://github.com/sql-formatter-org/sql-formatter)
 
 ## Installation
