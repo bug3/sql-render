@@ -55,7 +55,7 @@ Schema mode validates at define-time (schema keys must match template tokens) an
 - `schema.isoDate` - YYYY-MM-DD with calendar validation
 - `schema.isoTimestamp` - ISO 8601 with timezone (e.g. 2022-02-22T00:00:00Z)
 - `schema.identifier` - SQL identifier, up to 3 dot-separated parts (db.schema.table)
-- `schema.uuid` - RFC 4122 UUID
+- `schema.uuid` - UUID hex format (8-4-4-4-12 hex digits)
 - `schema.positiveInt` - integer greater than 0
 - `schema.enum(...values)` - whitelist of allowed string values
 - `schema.s3Path` - S3 URI (s3://athena-results/queries/)

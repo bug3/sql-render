@@ -107,7 +107,7 @@ const { sql } = getEvents({
 | `schema.isoDate` | `YYYY-MM-DD` | `'2022-02-22'` |
 | `schema.isoTimestamp` | ISO 8601 with timezone | `'2022-02-22T22:02:22.000Z'` |
 | `schema.identifier` | SQL identifier (up to `db.schema.table`) | `'public.users'` |
-| `schema.uuid` | RFC 4122 UUID | `'550e8400-e29b-41d4-a716-446655440000'` |
+| `schema.uuid` | UUID hex format (8-4-4-4-12) | `'550e8400-e29b-41d4-a716-446655440000'` |
 | `schema.positiveInt` | Positive integer | `100` |
 | `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
 | `schema.s3Path` | S3 URI | `'s3://athena-results/queries/'` |
