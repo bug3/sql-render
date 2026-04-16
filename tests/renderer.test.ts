@@ -29,4 +29,10 @@ describe('render', () => {
         const result = render('SELECT * FROM {{table}}', { table: '' });
         expect(result).toBe('SELECT * FROM ');
     });
+
+    it('treats $ sequences in values as literals', () => {
+        const template = "SELECT * FROM t WHERE a = '{{a}}' AND b = '{{b}}' AND c = '{{c}}'";
+        const result = render(template, { a: '$&', b: '$$', c: "$'" });
+        expect(result).toBe("SELECT * FROM t WHERE a = '$&' AND b = '$$' AND c = '$''");
+    });
 });
