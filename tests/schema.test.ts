@@ -189,6 +189,48 @@ describe('schema.enum', () => {
     });
 });
 
+describe('schema.array', () => {
+    it('accepts non-empty arrays whose elements pass the inner validator', () => {
+        const ints = schema.array(schema.positiveInt);
+        expect(ints.validate([1, 2, 3])).toBe(true);
+
+        const dates = schema.array(schema.isoDate);
+        expect(dates.validate(['2022-01-01', '2022-02-02'])).toBe(true);
+
+        const statuses = schema.array(schema.enum('active', 'pending'));
+        expect(statuses.validate(['active', 'pending'])).toBe(true);
+    });
+
+    it('rejects empty arrays', () => {
+        expect(schema.array(schema.positiveInt).validate([])).toBe(false);
+    });
+
+    it('rejects non-arrays', () => {
+        expect(schema.array(schema.positiveInt).validate(1)).toBe(false);
+        expect(schema.array(schema.positiveInt).validate('1,2,3')).toBe(false);
+        expect(schema.array(schema.positiveInt).validate(null)).toBe(false);
+    });
+
+    it('rejects arrays with any invalid element', () => {
+        expect(schema.array(schema.positiveInt).validate([1, -1, 2])).toBe(false);
+        expect(schema.array(schema.isoDate).validate(['2022-01-01', 'bad'])).toBe(false);
+    });
+
+    it('rejects arrays of strings with SQL injection', () => {
+        expect(schema.array(schema.string).validate(['a', "b'; DROP TABLE x"])).toBe(false);
+    });
+
+    it('escapes strings by quoting and doubling single quotes', () => {
+        const arr = schema.array(schema.string);
+        expect(arr.escape?.(['a', "O'Brien"])).toBe("'a', 'O''Brien'");
+    });
+
+    it('escapes numbers without quotes', () => {
+        const arr = schema.array(schema.positiveInt);
+        expect(arr.escape?.([1, 2, 3])).toBe('1, 2, 3');
+    });
+});
+
 describe('schema.s3Path', () => {
     it('accepts valid S3 paths', () => {
         expect(schema.s3Path.validate('s3://my-bucket/data/')).toBe(true);

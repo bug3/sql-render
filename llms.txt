@@ -59,6 +59,7 @@ Schema mode validates at define-time (schema keys must match template tokens) an
 - `schema.positiveInt` - integer greater than 0
 - `schema.enum(...values)` - whitelist of allowed string values
 - `schema.s3Path` - S3 URI (s3://athena-results/queries/)
+- `schema.array(inner)` - non-empty array; renders `'a', 'b'` for strings, `1, 2, 3` for numbers; rejects empty arrays
 
 ### Custom schema types
 

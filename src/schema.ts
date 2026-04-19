@@ -9,10 +9,16 @@ const S3_PATH_REGEX = /^s3:\/\/(?![^/]*\.\.)[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](\/[
 export interface TypeDescriptor<T = unknown> {
     readonly __phantom?: T;
     validate(val: unknown): boolean;
+    escape?(val: unknown): string;
 }
 
 function descriptor<T>(validate: (val: unknown) => boolean): TypeDescriptor<T> {
     return { validate };
+}
+
+function formatArrayElement(val: unknown): string {
+    if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+    return String(val);
 }
 
 function isString(val: unknown): val is string {
@@ -61,6 +67,15 @@ export const schema = {
     enum: <T extends string>(...values: T[]): TypeDescriptor<T> => descriptor<T>(
         (val) => isString(val) && (values as string[]).includes(val),
     ),
+
+    array: <T>(inner: TypeDescriptor<T>): TypeDescriptor<T[]> => ({
+        validate: (val) => Array.isArray(val)
+            && val.length > 0
+            && val.every((v) => inner.validate(v)),
+        escape: (val) => (val as unknown[])
+            .map((v) => (inner.escape ? inner.escape(v) : formatArrayElement(v)))
+            .join(', '),
+    }),
 };
 
 export type SchemaDefinition = Record<string, TypeDescriptor>;

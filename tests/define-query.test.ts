@@ -290,6 +290,45 @@ describe('defineQuery — schema mode', () => {
         });
     });
 
+    describe('schema.array', () => {
+        it('renders a list of numbers without quotes', () => {
+            const query = defineQuery(fixture('in-clause.sql'), {
+                table: schema.identifier,
+                ids: schema.array(schema.positiveInt),
+            });
+            const { sql } = query({ table: 'users', ids: [1, 2, 3] });
+            expect(sql).toContain('IN (1, 2, 3)');
+        });
+
+        it('renders a list of strings with quotes and escapes single quotes', () => {
+            const query = defineQuery(fixture('in-clause.sql'), {
+                table: schema.identifier,
+                ids: schema.array(schema.string),
+            });
+            const { sql } = query({ table: 'users', ids: ['a', "O'Brien"] });
+            expect(sql).toContain("IN ('a', 'O''Brien')");
+        });
+
+        it('rejects an empty array', () => {
+            const query = defineQuery(fixture('in-clause.sql'), {
+                table: schema.identifier,
+                ids: schema.array(schema.positiveInt),
+            });
+            expect(() => query({ table: 'users', ids: [] })).toThrow('Schema validation failed');
+        });
+
+        it('rejects a mixed-type array when inner is strict', () => {
+            const query = defineQuery(fixture('in-clause.sql'), {
+                table: schema.identifier,
+                ids: schema.array(schema.positiveInt),
+            });
+            expect(() => query({
+                table: 'users',
+                ids: [1, -1, 2] as unknown as number[],
+            })).toThrow('Schema validation failed');
+        });
+    });
+
     describe('custom schema types', () => {
         it('accepts a custom type descriptor', () => {
             const prodTable = {

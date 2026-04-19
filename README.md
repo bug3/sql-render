@@ -111,6 +111,26 @@ const { sql } = getEvents({
 | `schema.positiveInt` | Positive integer | `100` |
 | `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
 | `schema.s3Path` | S3 URI | `'s3://athena-results/queries/'` |
+| `schema.array(inner)` | Non-empty array of `inner` values | `schema.array(schema.positiveInt)` |
+
+### Array Values (IN clauses)
+
+`schema.array(inner)` validates every element against `inner` and renders a comma-separated SQL list. Strings are quoted and their single quotes escaped; numbers and booleans are rendered raw. Empty arrays are rejected.
+
+```sql
+-- queries/getByIds.sql
+SELECT * FROM {{table}} WHERE id IN ({{ids}})
+```
+
+```typescript
+const getByIds = defineQuery('./queries/getByIds.sql', {
+  table: schema.identifier,
+  ids: schema.array(schema.positiveInt),
+});
+
+const { sql } = getByIds({ table: 'users', ids: [1, 2, 3] });
+// ... WHERE id IN (1, 2, 3)
+```
 
 ### Custom Schema Types
 

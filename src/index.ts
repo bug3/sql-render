@@ -82,7 +82,7 @@ export function defineQuery(
                         `Schema validation failed for '${key}': received ${typeof value} (${JSON.stringify(value)})`,
                     );
                 }
-                values[key] = escapeValue(value);
+                values[key] = desc.escape ? desc.escape(value) : escapeValue(value);
             } else {
                 values[key] = validateAndConvert(key, value);
             }
