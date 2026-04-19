@@ -4,6 +4,13 @@ export interface QueryResult {
     sql: string;
 }
 
-export type GenericQueryFn<T> = (params: T) => QueryResult;
+export interface QueryOptions {
+    exportTo?: string;
+}
 
-export type SchemaQueryFn<S extends SchemaDefinition> = (params: InferParams<S>) => QueryResult;
+export type GenericQueryFn<T> = (params: T, options?: QueryOptions) => QueryResult;
+
+export type SchemaQueryFn<S extends SchemaDefinition> = (
+    params: InferParams<S>,
+    options?: QueryOptions,
+) => QueryResult;

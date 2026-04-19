@@ -132,6 +132,17 @@ const query = defineQuery('./query.sql', {
 
 A type descriptor is any object with a `validate(val: unknown) => boolean` method.
 
+## Exporting Rendered SQL
+
+Pass an `exportTo` path to write the rendered SQL to disk for debugging or audit purposes. Missing parent directories are created automatically.
+
+```typescript
+const { sql } = getEvents(
+  { tableName: 'prod_events', status: 'active', startDate: '2022-02-22', orderBy: 'created_at', limit: 99 },
+  { exportTo: './debug/getEvents.sql' },
+);
+```
+
 ## SQL Injection Protection
 
 `schema.string` and the generic `string` type check values against built-in patterns:

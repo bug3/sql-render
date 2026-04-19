@@ -1,5 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { defineQuery, schema } from '../src/index';
 
 const fixture = (name: string) => path.join(__dirname, 'fixtures', name);
@@ -237,6 +239,54 @@ describe('defineQuery — schema mode', () => {
                 table: { foo: 'bar' } as any,
                 id: schema.number,
             })).toThrow('must have a validate(val) method');
+        });
+    });
+
+    describe('exportTo option', () => {
+        let tmpDir: string;
+
+        beforeEach(() => {
+            tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sql-render-'));
+        });
+
+        afterEach(() => {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        });
+
+        it('writes rendered sql to the given file', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
+            const outPath = path.join(tmpDir, 'rendered.sql');
+            const { sql } = query({ table: 'users', id: 33 }, { exportTo: outPath });
+            expect(fs.readFileSync(outPath, 'utf-8')).toBe(sql);
+        });
+
+        it('creates parent directories recursively', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
+            const outPath = path.join(tmpDir, 'nested', 'deep', 'out.sql');
+            query({ table: 'users', id: 1 }, { exportTo: outPath });
+            expect(fs.existsSync(outPath)).toBe(true);
+        });
+
+        it('does not write a file when exportTo is omitted', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.number,
+            });
+            query({ table: 'users', id: 1 });
+            expect(fs.readdirSync(tmpDir)).toHaveLength(0);
+        });
+
+        it('works in generic mode', () => {
+            const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
+            const outPath = path.join(tmpDir, 'generic.sql');
+            const { sql } = query({ table: 'users', id: 7 }, { exportTo: outPath });
+            expect(fs.readFileSync(outPath, 'utf-8')).toBe(sql);
         });
     });
 

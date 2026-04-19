@@ -88,12 +88,20 @@ ORDER BY {{orderBy}}
 LIMIT {{limit}}
 ```
 
+### Exporting rendered SQL
+
+Pass `{ exportTo: string }` as the second argument to write the rendered SQL to disk. Missing parent directories are created recursively.
+
+```typescript
+const { sql } = getEvents(params, { exportTo: './debug/getEvents.sql' });
+```
+
 ### Exports
 
 - `defineQuery` - main function (overloaded for generic and schema modes)
 - `schema` - built-in schema type descriptors
 - `SQL_INJECTION_PATTERNS` - array of { name, regex } patterns used for injection detection
-- Types: `TypeDescriptor`, `SchemaDefinition`, `InferParams`, `QueryResult`, `GenericQueryFn`, `SchemaQueryFn`
+- Types: `TypeDescriptor`, `SchemaDefinition`, `InferParams`, `QueryResult`, `QueryOptions`, `GenericQueryFn`, `SchemaQueryFn`
 
 ## Key details
 

@@ -3,7 +3,7 @@
 ## v0.2
 
 - [ ] **Inline template support** - Allow passing SQL strings directly without requiring a `.sql` file, reducing boilerplate for short one-off queries
-- [ ] **Export rendered SQL to file** - Add an option to write the rendered SQL to a file for debugging and audit purposes
+- [x] **Export rendered SQL to file** - Add an option to write the rendered SQL to a file for debugging and audit purposes
 - [ ] **TypeDescriptor `description` field** - Add an optional `description` property to `TypeDescriptor` so schema validation errors can display the expected format (e.g. `Expected: ISO date YYYY-MM-DD`)
 
 ## Maybe

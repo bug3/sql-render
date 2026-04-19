@@ -1,16 +1,17 @@
 import { loadTemplate } from './loader';
 import { validateAndConvert, escapeValue } from './validator';
 import { render } from './renderer';
+import { writeRendered } from './writer';
 import type { SchemaDefinition } from './schema';
 import type {
-    QueryResult, GenericQueryFn, SchemaQueryFn,
+    QueryResult, QueryOptions, GenericQueryFn, SchemaQueryFn,
 } from './types';
 
 export { SQL_INJECTION_PATTERNS } from './validator';
 export { schema } from './schema';
 export type { TypeDescriptor, SchemaDefinition, InferParams } from './schema';
 export type {
-    QueryResult, GenericQueryFn, SchemaQueryFn,
+    QueryResult, QueryOptions, GenericQueryFn, SchemaQueryFn,
 } from './types';
 
 export function defineQuery<S extends SchemaDefinition>(
@@ -23,7 +24,7 @@ export function defineQuery<T extends Record<string, string | number | boolean>>
 export function defineQuery(
     filePath: string,
     schemaDef?: SchemaDefinition,
-): (params: Record<string, unknown>) => QueryResult {
+): (params: Record<string, unknown>, options?: QueryOptions) => QueryResult {
     const { template, tokens } = loadTemplate(filePath);
 
     if (schemaDef) {
@@ -53,7 +54,7 @@ export function defineQuery(
         }
     }
 
-    return (params) => {
+    return (params, options) => {
         const paramKeys = Object.keys(params);
 
         const missing = tokens.filter((tok) => !paramKeys.includes(tok));
@@ -87,6 +88,12 @@ export function defineQuery(
             }
         }
 
-        return { sql: render(template, values) };
+        const sql = render(template, values);
+
+        if (options?.exportTo) {
+            writeRendered(options.exportTo, sql);
+        }
+
+        return { sql };
     };
 }
