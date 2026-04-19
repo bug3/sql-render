@@ -329,6 +329,65 @@ describe('defineQuery — schema mode', () => {
         });
     });
 
+    describe('schema.nullable', () => {
+        it('renders null as the SQL NULL literal', () => {
+            const query = defineQuery(fixture('nullable.sql'), {
+                table: schema.identifier,
+                lastLogin: schema.nullable(schema.isoTimestamp),
+                id: schema.positiveInt,
+            });
+            const { sql } = query({ table: 'users', lastLogin: null, id: 1 });
+            expect(sql).toContain('last_login = NULL');
+        });
+
+        it('renders undefined as the SQL NULL literal', () => {
+            const query = defineQuery(fixture('nullable.sql'), {
+                table: schema.identifier,
+                lastLogin: schema.nullable(schema.isoTimestamp),
+                id: schema.positiveInt,
+            });
+            const { sql } = query({
+                table: 'users',
+                lastLogin: undefined as unknown as string,
+                id: 1,
+            });
+            expect(sql).toContain('last_login = NULL');
+        });
+
+        it('delegates to the inner escape for non-null values', () => {
+            const query = defineQuery(fixture('nullable.sql'), {
+                table: schema.identifier,
+                lastLogin: schema.nullable(schema.isoTimestamp),
+                id: schema.positiveInt,
+            });
+            const { sql } = query({
+                table: 'users',
+                lastLogin: '2022-02-22T22:02:22Z',
+                id: 1,
+            });
+            expect(sql).toContain('last_login = 2022-02-22T22:02:22Z');
+        });
+
+        it('still rejects invalid non-null values', () => {
+            const query = defineQuery(fixture('nullable.sql'), {
+                table: schema.identifier,
+                lastLogin: schema.nullable(schema.isoTimestamp),
+                id: schema.positiveInt,
+            });
+            expect(() => query({ table: 'users', lastLogin: 'nope', id: 1 }))
+                .toThrow('Schema validation failed');
+        });
+
+        it('non-nullable descriptors still reject null with the dedicated message', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.positiveInt,
+            });
+            const params = { table: 'users', id: null } as unknown as { table: string; id: number };
+            expect(() => query(params)).toThrow('cannot be null or undefined');
+        });
+    });
+
     describe('custom schema types', () => {
         it('accepts a custom type descriptor', () => {
             const prodTable = {

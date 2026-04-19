@@ -231,6 +231,38 @@ describe('schema.array', () => {
     });
 });
 
+describe('schema.nullable', () => {
+    it('accepts null and undefined', () => {
+        const nstr = schema.nullable(schema.string);
+        expect(nstr.validate(null)).toBe(true);
+        expect(nstr.validate(undefined)).toBe(true);
+    });
+
+    it('delegates validation to the inner descriptor for non-null values', () => {
+        const nstr = schema.nullable(schema.string);
+        expect(nstr.validate('hello')).toBe(true);
+        expect(nstr.validate('x; DROP TABLE y')).toBe(false);
+
+        const nint = schema.nullable(schema.positiveInt);
+        expect(nint.validate(5)).toBe(true);
+        expect(nint.validate(-1)).toBe(false);
+    });
+
+    it('renders null and undefined as the SQL NULL literal', () => {
+        const nstr = schema.nullable(schema.string);
+        expect(nstr.escape?.(null)).toBe('NULL');
+        expect(nstr.escape?.(undefined)).toBe('NULL');
+    });
+
+    it('delegates escape to the inner descriptor for non-null values', () => {
+        const nstr = schema.nullable(schema.string);
+        expect(nstr.escape?.("O'Brien")).toBe("O''Brien");
+
+        const nint = schema.nullable(schema.positiveInt);
+        expect(nint.escape?.(42)).toBe('42');
+    });
+});
+
 describe('schema.s3Path', () => {
     it('accepts valid S3 paths', () => {
         expect(schema.s3Path.validate('s3://my-bucket/data/')).toBe(true);

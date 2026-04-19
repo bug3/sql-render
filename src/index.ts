@@ -73,11 +73,11 @@ export function defineQuery(
             const value = params[key];
 
             if (schemaDef) {
-                if (value === null || value === undefined) {
-                    throw new Error(`Validation failed for '${key}': value cannot be null or undefined`);
-                }
                 const desc = schemaDef[key];
                 if (!desc.validate(value)) {
+                    if (value === null || value === undefined) {
+                        throw new Error(`Validation failed for '${key}': value cannot be null or undefined`);
+                    }
                     throw new Error(
                         `Schema validation failed for '${key}': received ${typeof value} (${JSON.stringify(value)})`,
                     );

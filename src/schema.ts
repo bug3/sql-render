@@ -1,4 +1,4 @@
-import { SQL_INJECTION_PATTERNS } from './validator';
+import { SQL_INJECTION_PATTERNS, escapeValue } from './validator';
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
@@ -75,6 +75,14 @@ export const schema = {
         escape: (val) => (val as unknown[])
             .map((v) => (inner.escape ? inner.escape(v) : formatArrayElement(v)))
             .join(', '),
+    }),
+
+    nullable: <T>(inner: TypeDescriptor<T>): TypeDescriptor<T | null> => ({
+        validate: (val) => val === null || val === undefined || inner.validate(val),
+        escape: (val) => {
+            if (val === null || val === undefined) return 'NULL';
+            return inner.escape ? inner.escape(val) : escapeValue(val);
+        },
     }),
 };
 

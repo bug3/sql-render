@@ -112,6 +112,7 @@ const { sql } = getEvents({
 | `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
 | `schema.s3Path` | S3 URI | `'s3://athena-results/queries/'` |
 | `schema.array(inner)` | Non-empty array of `inner` values | `schema.array(schema.positiveInt)` |
+| `schema.nullable(inner)` | `null` / `undefined` or `inner` value | `schema.nullable(schema.isoTimestamp)` |
 
 ### Array Values (IN clauses)
 
@@ -130,6 +131,26 @@ const getByIds = defineQuery('./queries/getByIds.sql', {
 
 const { sql } = getByIds({ table: 'users', ids: [1, 2, 3] });
 // ... WHERE id IN (1, 2, 3)
+```
+
+### Nullable Values
+
+`schema.nullable(inner)` accepts `null` / `undefined` in addition to whatever `inner` accepts, and emits the bare SQL `NULL` literal. Do not wrap the placeholder in quotes in your template, since `NULL` must be unquoted.
+
+```sql
+-- queries/updateLogin.sql
+UPDATE {{table}} SET last_login = {{lastLogin}} WHERE id = {{id}}
+```
+
+```typescript
+const updateLogin = defineQuery('./queries/updateLogin.sql', {
+  table: schema.identifier,
+  lastLogin: schema.nullable(schema.isoTimestamp),
+  id: schema.positiveInt,
+});
+
+updateLogin({ table: 'users', lastLogin: null, id: 1 });
+// ... SET last_login = NULL ...
 ```
 
 ### Custom Schema Types

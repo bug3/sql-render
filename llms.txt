@@ -60,6 +60,7 @@ Schema mode validates at define-time (schema keys must match template tokens) an
 - `schema.enum(...values)` - whitelist of allowed string values
 - `schema.s3Path` - S3 URI (s3://athena-results/queries/)
 - `schema.array(inner)` - non-empty array; renders `'a', 'b'` for strings, `1, 2, 3` for numbers; rejects empty arrays
+- `schema.nullable(inner)` - accepts null/undefined (emits SQL `NULL`) or delegates to `inner`; template must not quote the placeholder
 
 ### Custom schema types
 
