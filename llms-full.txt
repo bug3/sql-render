@@ -52,7 +52,9 @@ tests/
   fixtures/
     duplicate-vars.sql
     getEvents.sql
+    in-clause.sql
     no-vars.sql
+    nullable.sql
     simple.sql
   define-query.test.ts
   loader.test.ts
@@ -238,16 +240,16 @@ export function defineQuery(
             const value = params[key];
 
             if (schemaDef) {
-                if (value === null || value === undefined) {
-                    throw new Error(`Validation failed for '${key}': value cannot be null or undefined`);
-                }
                 const desc = schemaDef[key];
                 if (!desc.validate(value)) {
+                    if (value === null || value === undefined) {
+                        throw new Error(`Validation failed for '${key}': value cannot be null or undefined`);
+                    }
                     throw new Error(
                         `Schema validation failed for '${key}': received ${typeof value} (${JSON.stringify(value)})`,
                     );
                 }
-                values[key] = escapeValue(value);
+                values[key] = desc.escape ? desc.escape(value) : escapeValue(value);
             } else {
                 values[key] = validateAndConvert(key, value);
             }
@@ -295,22 +297,18 @@ export function loadTemplate(filePath: string): { template: string; tokens: stri
 
 ## File: src/renderer.ts
 ````typescript
+const TOKEN_REGEX = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
+
 export function render(template: string, values: Record<string, string>): string {
-    let result = template;
-
-    for (const [key, value] of Object.entries(values)) {
-        const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const pattern = new RegExp(`\\{\\{${escaped}\\}\\}`, 'g');
-        result = result.replace(pattern, () => value);
-    }
-
-    return result;
+    return template.replace(TOKEN_REGEX, (match, key) => (
+        Object.hasOwn(values, key) ? values[key] : match
+    ));
 }
 ````
 
 ## File: src/schema.ts
 ````typescript
-import { SQL_INJECTION_PATTERNS } from './validator';
+import { SQL_INJECTION_PATTERNS, escapeValue } from './validator';
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
@@ -321,10 +319,16 @@ const S3_PATH_REGEX = /^s3:\/\/(?![^/]*\.\.)[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](\/[
 export interface TypeDescriptor<T = unknown> {
     readonly __phantom?: T;
     validate(val: unknown): boolean;
+    escape?(val: unknown): string;
 }
 
 function descriptor<T>(validate: (val: unknown) => boolean): TypeDescriptor<T> {
     return { validate };
+}
+
+function formatArrayElement(val: unknown): string {
+    if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+    return String(val);
 }
 
 function isString(val: unknown): val is string {
@@ -373,6 +377,23 @@ export const schema = {
     enum: <T extends string>(...values: T[]): TypeDescriptor<T> => descriptor<T>(
         (val) => isString(val) && (values as string[]).includes(val),
     ),
+
+    array: <T>(inner: TypeDescriptor<T>): TypeDescriptor<T[]> => ({
+        validate: (val) => Array.isArray(val)
+            && val.length > 0
+            && val.every((v) => inner.validate(v)),
+        escape: (val) => (val as unknown[])
+            .map((v) => (inner.escape ? inner.escape(v) : formatArrayElement(v)))
+            .join(', '),
+    }),
+
+    nullable: <T>(inner: TypeDescriptor<T>): TypeDescriptor<T | null> => ({
+        validate: (val) => val === null || val === undefined || inner.validate(val),
+        escape: (val) => {
+            if (val === null || val === undefined) return 'NULL';
+            return inner.escape ? inner.escape(val) : escapeValue(val);
+        },
+    }),
 };
 
 export type SchemaDefinition = Record<string, TypeDescriptor>;
@@ -506,10 +527,29 @@ LIMIT
   {{limit}}
 ````
 
+## File: tests/fixtures/in-clause.sql
+````sql
+SELECT
+  *
+FROM
+  {{table}}
+WHERE
+  id IN ({{ids}})
+````
+
 ## File: tests/fixtures/no-vars.sql
 ````sql
 SELECT
   1
+````
+
+## File: tests/fixtures/nullable.sql
+````sql
+UPDATE {{table}}
+SET
+  last_login = {{lastLogin}}
+WHERE
+  id = {{id}}
 ````
 
 ## File: tests/fixtures/simple.sql
@@ -813,6 +853,104 @@ describe('defineQuery — schema mode', () => {
             const outPath = path.join(tmpDir, 'generic.sql');
             const { sql } = query({ table: 'users', id: 7 }, { exportTo: outPath });
             expect(fs.readFileSync(outPath, 'utf-8')).toBe(sql);
+        });
+    });
+
+    describe('schema.array', () => {
+        it('renders a list of numbers without quotes', () => {
+            const query = defineQuery(fixture('in-clause.sql'), {
+                table: schema.identifier,
+                ids: schema.array(schema.positiveInt),
+            });
+            const { sql } = query({ table: 'users', ids: [1, 2, 3] });
+            expect(sql).toContain('IN (1, 2, 3)');
+        });
+
+        it('renders a list of strings with quotes and escapes single quotes', () => {
+            const query = defineQuery(fixture('in-clause.sql'), {
+                table: schema.identifier,
+                ids: schema.array(schema.string),
+            });
+            const { sql } = query({ table: 'users', ids: ['a', "O'Brien"] });
+            expect(sql).toContain("IN ('a', 'O''Brien')");
+        });
+
+        it('rejects an empty array', () => {
+            const query = defineQuery(fixture('in-clause.sql'), {
+                table: schema.identifier,
+                ids: schema.array(schema.positiveInt),
+            });
+            expect(() => query({ table: 'users', ids: [] })).toThrow('Schema validation failed');
+        });
+
+        it('rejects a mixed-type array when inner is strict', () => {
+            const query = defineQuery(fixture('in-clause.sql'), {
+                table: schema.identifier,
+                ids: schema.array(schema.positiveInt),
+            });
+            expect(() => query({
+                table: 'users',
+                ids: [1, -1, 2] as unknown as number[],
+            })).toThrow('Schema validation failed');
+        });
+    });
+
+    describe('schema.nullable', () => {
+        it('renders null as the SQL NULL literal', () => {
+            const query = defineQuery(fixture('nullable.sql'), {
+                table: schema.identifier,
+                lastLogin: schema.nullable(schema.isoTimestamp),
+                id: schema.positiveInt,
+            });
+            const { sql } = query({ table: 'users', lastLogin: null, id: 1 });
+            expect(sql).toContain('last_login = NULL');
+        });
+
+        it('renders undefined as the SQL NULL literal', () => {
+            const query = defineQuery(fixture('nullable.sql'), {
+                table: schema.identifier,
+                lastLogin: schema.nullable(schema.isoTimestamp),
+                id: schema.positiveInt,
+            });
+            const { sql } = query({
+                table: 'users',
+                lastLogin: undefined as unknown as string,
+                id: 1,
+            });
+            expect(sql).toContain('last_login = NULL');
+        });
+
+        it('delegates to the inner escape for non-null values', () => {
+            const query = defineQuery(fixture('nullable.sql'), {
+                table: schema.identifier,
+                lastLogin: schema.nullable(schema.isoTimestamp),
+                id: schema.positiveInt,
+            });
+            const { sql } = query({
+                table: 'users',
+                lastLogin: '2022-02-22T22:02:22Z',
+                id: 1,
+            });
+            expect(sql).toContain('last_login = 2022-02-22T22:02:22Z');
+        });
+
+        it('still rejects invalid non-null values', () => {
+            const query = defineQuery(fixture('nullable.sql'), {
+                table: schema.identifier,
+                lastLogin: schema.nullable(schema.isoTimestamp),
+                id: schema.positiveInt,
+            });
+            expect(() => query({ table: 'users', lastLogin: 'nope', id: 1 }))
+                .toThrow('Schema validation failed');
+        });
+
+        it('non-nullable descriptors still reject null with the dedicated message', () => {
+            const query = defineQuery(fixture('simple.sql'), {
+                table: schema.identifier,
+                id: schema.positiveInt,
+            });
+            const params = { table: 'users', id: null } as unknown as { table: string; id: number };
+            expect(() => query(params)).toThrow('cannot be null or undefined');
         });
     });
 
@@ -1125,6 +1263,80 @@ describe('schema.enum', () => {
     });
 });
 
+describe('schema.array', () => {
+    it('accepts non-empty arrays whose elements pass the inner validator', () => {
+        const ints = schema.array(schema.positiveInt);
+        expect(ints.validate([1, 2, 3])).toBe(true);
+
+        const dates = schema.array(schema.isoDate);
+        expect(dates.validate(['2022-01-01', '2022-02-02'])).toBe(true);
+
+        const statuses = schema.array(schema.enum('active', 'pending'));
+        expect(statuses.validate(['active', 'pending'])).toBe(true);
+    });
+
+    it('rejects empty arrays', () => {
+        expect(schema.array(schema.positiveInt).validate([])).toBe(false);
+    });
+
+    it('rejects non-arrays', () => {
+        expect(schema.array(schema.positiveInt).validate(1)).toBe(false);
+        expect(schema.array(schema.positiveInt).validate('1,2,3')).toBe(false);
+        expect(schema.array(schema.positiveInt).validate(null)).toBe(false);
+    });
+
+    it('rejects arrays with any invalid element', () => {
+        expect(schema.array(schema.positiveInt).validate([1, -1, 2])).toBe(false);
+        expect(schema.array(schema.isoDate).validate(['2022-01-01', 'bad'])).toBe(false);
+    });
+
+    it('rejects arrays of strings with SQL injection', () => {
+        expect(schema.array(schema.string).validate(['a', "b'; DROP TABLE x"])).toBe(false);
+    });
+
+    it('escapes strings by quoting and doubling single quotes', () => {
+        const arr = schema.array(schema.string);
+        expect(arr.escape?.(['a', "O'Brien"])).toBe("'a', 'O''Brien'");
+    });
+
+    it('escapes numbers without quotes', () => {
+        const arr = schema.array(schema.positiveInt);
+        expect(arr.escape?.([1, 2, 3])).toBe('1, 2, 3');
+    });
+});
+
+describe('schema.nullable', () => {
+    it('accepts null and undefined', () => {
+        const nstr = schema.nullable(schema.string);
+        expect(nstr.validate(null)).toBe(true);
+        expect(nstr.validate(undefined)).toBe(true);
+    });
+
+    it('delegates validation to the inner descriptor for non-null values', () => {
+        const nstr = schema.nullable(schema.string);
+        expect(nstr.validate('hello')).toBe(true);
+        expect(nstr.validate('x; DROP TABLE y')).toBe(false);
+
+        const nint = schema.nullable(schema.positiveInt);
+        expect(nint.validate(5)).toBe(true);
+        expect(nint.validate(-1)).toBe(false);
+    });
+
+    it('renders null and undefined as the SQL NULL literal', () => {
+        const nstr = schema.nullable(schema.string);
+        expect(nstr.escape?.(null)).toBe('NULL');
+        expect(nstr.escape?.(undefined)).toBe('NULL');
+    });
+
+    it('delegates escape to the inner descriptor for non-null values', () => {
+        const nstr = schema.nullable(schema.string);
+        expect(nstr.escape?.("O'Brien")).toBe("O''Brien");
+
+        const nint = schema.nullable(schema.positiveInt);
+        expect(nint.escape?.(42)).toBe('42');
+    });
+});
+
 describe('schema.s3Path', () => {
     it('accepts valid S3 paths', () => {
         expect(schema.s3Path.validate('s3://my-bucket/data/')).toBe(true);
@@ -1384,6 +1596,8 @@ Schema mode validates at define-time (schema keys must match template tokens) an
 - `schema.positiveInt` - integer greater than 0
 - `schema.enum(...values)` - whitelist of allowed string values
 - `schema.s3Path` - S3 URI (s3://athena-results/queries/)
+- `schema.array(inner)` - non-empty array; renders `'a', 'b'` for strings, `1, 2, 3` for numbers; rejects empty arrays
+- `schema.nullable(inner)` - accepts null/undefined (emits SQL `NULL`) or delegates to `inner`; template must not quote the placeholder
 
 ### Custom schema types
 
@@ -1668,6 +1882,47 @@ const { sql } = getEvents({
 | `schema.positiveInt` | Positive integer | `100` |
 | `schema.enum(...)` | Whitelist of allowed values | `schema.enum('asc', 'desc')` |
 | `schema.s3Path` | S3 URI | `'s3://athena-results/queries/'` |
+| `schema.array(inner)` | Non-empty array of `inner` values | `schema.array(schema.positiveInt)` |
+| `schema.nullable(inner)` | `null` / `undefined` or `inner` value | `schema.nullable(schema.isoTimestamp)` |
+
+### Array Values (IN clauses)
+
+`schema.array(inner)` validates every element against `inner` and renders a comma-separated SQL list. Strings are quoted and their single quotes escaped; numbers and booleans are rendered raw. Empty arrays are rejected.
+
+```sql
+-- queries/getByIds.sql
+SELECT * FROM {{table}} WHERE id IN ({{ids}})
+```
+
+```typescript
+const getByIds = defineQuery('./queries/getByIds.sql', {
+  table: schema.identifier,
+  ids: schema.array(schema.positiveInt),
+});
+
+const { sql } = getByIds({ table: 'users', ids: [1, 2, 3] });
+// ... WHERE id IN (1, 2, 3)
+```
+
+### Nullable Values
+
+`schema.nullable(inner)` accepts `null` / `undefined` in addition to whatever `inner` accepts, and emits the bare SQL `NULL` literal. Do not wrap the placeholder in quotes in your template, since `NULL` must be unquoted.
+
+```sql
+-- queries/updateLogin.sql
+UPDATE {{table}} SET last_login = {{lastLogin}} WHERE id = {{id}}
+```
+
+```typescript
+const updateLogin = defineQuery('./queries/updateLogin.sql', {
+  table: schema.identifier,
+  lastLogin: schema.nullable(schema.isoTimestamp),
+  id: schema.positiveInt,
+});
+
+updateLogin({ table: 'users', lastLogin: null, id: 1 });
+// ... SET last_login = NULL ...
+```
 
 ### Custom Schema Types
 
