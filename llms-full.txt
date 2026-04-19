@@ -572,7 +572,7 @@ import { defineQuery, schema } from '../src/index';
 
 const fixture = (name: string) => path.join(__dirname, 'fixtures', name);
 
-describe('defineQuery — generic mode', () => {
+describe('defineQuery - generic mode', () => {
     it('renders a query with basic types', () => {
         const query = defineQuery<{ table: string; id: number }>(fixture('simple.sql'));
         const { sql } = query({ table: 'users', id: 33 });
@@ -618,7 +618,7 @@ describe('defineQuery — generic mode', () => {
     });
 });
 
-describe('defineQuery — schema mode', () => {
+describe('defineQuery - schema mode', () => {
     it('renders a full query with all parameters', () => {
         const getEvents = defineQuery(fixture('getEvents.sql'), {
             tableName: schema.identifier,
